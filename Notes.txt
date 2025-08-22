@@ -1,0 +1,20 @@
+🔧 1. Prerequisites
+
+Make sure these are installed first:
+
+Tool	Download Link	Notes
+Node.js (LTS)	nodejs.org
+	Required for React Native CLI
+JDK 17+	✅ Already installed	You have JDK 24 ✅
+Visual Studio Code	code.visualstudio.com
+	Lightweight code editor
+Android Studio	developer.android.com/studio
+	Required for SDK + emulator
+
+
+Installing: 
+npx @react-native-community/cli@latest init RoomPe
+
+Running: 
+npm start
+npm run android
