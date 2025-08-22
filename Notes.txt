@@ -18,3 +18,48 @@ npx @react-native-community/cli@latest init RoomPe
 Running: 
 npm start
 npm run android
+
+
+🎨 Recommended Color Palette for RoomPe
+
+Here’s a balanced, professional, and modern color scheme:
+
+✅ Primary Color (Brand/Main Buttons)
+
+🟦 Indigo 600 — #4F46E5
+
+Trustworthy, modern, fintech-style
+
+Used for login buttons, primary CTAs
+
+🔘 Secondary Color (Highlights, Icons)
+
+🔵 Sky Blue / Cyan 500 — #06B6D4
+
+Energetic, engaging, appeals to younger users
+
+🏠 Background/Base
+
+⚪ Soft Gray 50 — #F9FAFB
+
+⚪ White — #FFFFFF
+
+🔤 Text Colors
+
+⚫ Dark Gray 900 — #111827 (Main text)
+
+⚫ Gray 600 — #4B5563 (Subtext)
+
+🚨 Alert Colors
+
+✅ Success: #22C55E (Green 500)
+
+⚠️ Warning: #F59E0B (Amber 500)
+
+❌ Error: #EF4444 (Red 500)
+
+🟣 Optional Accent (Brand Pop)
+
+🟣 Violet 400 — #A78BFA
+
+Can be used in onboarding or referral sections to add visual interest
