@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "290507797128",
+    "project_id": "roompe-6f643",
+    "storage_bucket": "roompe-6f643.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:290507797128:android:d1ccae0ce294efb28e653d",
+        "android_client_info": {
+          "package_name": "com.roompe.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "290507797128-9bqfgorshb4mid6ot3b3ff3jeaio7cil.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPtsKoULLvKH4rw4X8LjwZuRKV1_udxJw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "290507797128-9bqfgorshb4mid6ot3b3ff3jeaio7cil.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
