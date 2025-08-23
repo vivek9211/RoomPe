@@ -1,4 +1,5 @@
 import { Timestamp } from '@react-native-firebase/firestore';
+import { NotificationPreferences } from './common.types';
 
 // Notification type enumeration
 export enum NotificationType {
@@ -258,8 +259,11 @@ export interface NotificationCampaign {
   updatedAt: Timestamp;
 }
 
-// Notification preferences interface
-export interface NotificationPreferences {
+// Re-export common NotificationPreferences
+export type { NotificationPreferences };
+
+// Extended notification preferences for detailed configuration
+export interface DetailedNotificationPreferences {
   userId: string;
   email: {
     enabled: boolean;

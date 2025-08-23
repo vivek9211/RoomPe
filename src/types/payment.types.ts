@@ -1,16 +1,8 @@
 import { Timestamp } from '@react-native-firebase/firestore';
+import { PaymentStatus } from './common.types';
 
-// Payment status enumeration
-export enum PaymentStatus {
-  PENDING = 'pending',
-  PAID = 'paid',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled',
-  REFUNDED = 'refunded',
-  PARTIAL = 'partial',
-  OVERDUE = 'overdue',
-  WAIVED = 'waived'
-}
+// Re-export common PaymentStatus
+export { PaymentStatus };
 
 // Payment method enumeration
 export enum PaymentMethod {

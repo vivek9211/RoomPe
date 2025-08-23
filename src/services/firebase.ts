@@ -1,4 +1,5 @@
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { UserRole } from '../types/user.types';
 
 // Initialize Firebase (this happens automatically when the app starts)
 // The google-services.json file in android/app/ will be used for configuration
@@ -17,9 +18,22 @@ export interface LoginCredentials {
 
 export interface RegisterCredentials extends LoginCredentials {
   displayName?: string;
+  name: string;
+  phone: string;
+  role: UserRole;
 }
 
-class FirebaseService {
+class FirebaseAuthService {
+  // Check if Firebase Auth is properly initialized
+  isFirebaseInitialized(): boolean {
+    try {
+      return !!auth;
+    } catch (error) {
+      console.error('Firebase Auth initialization check failed:', error);
+      return false;
+    }
+  }
+
   // Get current user
   getCurrentUser(): AuthUser | null {
     const user = auth().currentUser;
@@ -99,6 +113,76 @@ class FirebaseService {
     }
   }
 
+  // Update user profile in Firebase Auth
+  async updateAuthProfile(updates: { displayName?: string; photoURL?: string }): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.updateProfile(updates);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Update user email
+  async updateEmail(newEmail: string): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.updateEmail(newEmail);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Update user password
+  async updatePassword(newPassword: string): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.updatePassword(newPassword);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Delete user account
+  async deleteUser(): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.delete();
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Send email verification
+  async sendEmailVerification(): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.sendEmailVerification();
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
   // Listen to auth state changes
   onAuthStateChanged(callback: (user: AuthUser | null) => void): () => void {
     return auth().onAuthStateChanged((user) => {
@@ -144,6 +228,12 @@ class FirebaseService {
       case 'auth/network-request-failed':
         message = 'Network error. Please check your connection.';
         break;
+      case 'auth/requires-recent-login':
+        message = 'This operation requires recent authentication. Please sign in again.';
+        break;
+      case 'auth/invalid-credential':
+        message = 'Invalid credentials.';
+        break;
       default:
         message = error.message || message;
     }
@@ -152,5 +242,29 @@ class FirebaseService {
   }
 }
 
-export const firebaseService = new FirebaseService();
-export default firebaseService;
+export const firebaseAuthService = new FirebaseAuthService();
+
+// Debug function to test Firebase Auth connection
+export const testFirebaseAuthConnection = async () => {
+  try {
+    console.log('Testing Firebase Auth connection...');
+    
+    if (!firebaseAuthService.isFirebaseInitialized()) {
+      console.error('Firebase Auth is not initialized');
+      return false;
+    }
+    
+    console.log('Firebase Auth is initialized');
+    
+    // Test Firebase Auth connection by trying to access current user
+    const currentUser = auth().currentUser;
+    console.log('Firebase Auth access successful');
+    
+    return true;
+  } catch (error: any) {
+    console.error('Firebase Auth connection test failed:', error);
+    return false;
+  }
+};
+
+export default firebaseAuthService;

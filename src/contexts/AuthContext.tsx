@@ -1,13 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import firebaseService, { AuthUser } from '../services/firebase';
+import firebaseAuthService, { AuthUser } from '../services/firebase';
+import firestoreService from '../services/firestore';
+import { User } from '../types/user.types';
 
 interface AuthContextType {
   user: AuthUser | null;
+  userProfile: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName?: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string, phone: string, role: 'tenant' | 'owner') => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,12 +22,39 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Fetch user profile from Firestore
+  const fetchUserProfile = async (uid: string) => {
+    try {
+      const profile = await firestoreService.getUserProfile(uid);
+      setUserProfile(profile);
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setUserProfile(null);
+    }
+  };
+
+  // Refresh user profile
+  const refreshUserProfile = async () => {
+    if (user?.uid) {
+      await fetchUserProfile(user.uid);
+    }
+  };
 
   useEffect(() => {
     // Listen for authentication state changes
-    const unsubscribe = firebaseService.onAuthStateChanged((user: AuthUser | null) => {
+    const unsubscribe = firebaseAuthService.onAuthStateChanged(async (user: AuthUser | null) => {
       setUser(user);
+      
+      if (user) {
+        // Fetch user profile when user is authenticated
+        await fetchUserProfile(user.uid);
+      } else {
+        setUserProfile(null);
+      }
+      
       setLoading(false);
     });
 
@@ -33,18 +64,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await firebaseService.signInWithEmailAndPassword({ email, password });
+      await firebaseAuthService.signInWithEmailAndPassword({ email, password });
     } catch (error) {
       throw error;
     }
   };
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
+  const signUp = async (email: string, password: string, name: string, phone: string, role: 'tenant' | 'owner') => {
     try {
-      await firebaseService.createUserWithEmailAndPassword({ 
+      // Create user in Firebase Auth
+      const authUser = await firebaseAuthService.createUserWithEmailAndPassword({ 
         email, 
         password, 
-        displayName 
+        name,
+        phone,
+        role: role as any,
+        displayName: name
+      });
+
+      // Create user profile in Firestore
+      await firestoreService.createUserProfile({
+        uid: authUser.uid,
+        email,
+        name,
+        phone,
+        role: role as any,
       });
     } catch (error) {
       throw error;
@@ -53,7 +97,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
-      await firebaseService.signOut();
+      await firebaseAuthService.signOut();
     } catch (error) {
       throw error;
     }
@@ -61,7 +105,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const resetPassword = async (email: string) => {
     try {
-      await firebaseService.resetPassword(email);
+      await firebaseAuthService.resetPassword(email);
     } catch (error) {
       throw error;
     }
@@ -69,11 +113,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const value: AuthContextType = {
     user,
+    userProfile,
     loading,
     signIn,
     signUp,
     signOut,
     resetPassword,
+    refreshUserProfile,
   };
 
   return (
