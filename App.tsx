@@ -13,7 +13,10 @@ import {
 import WelcomeScreen from './src/screens/auth/WelcomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
+import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
+import DashboardScreen from './src/screens/dashboard/DashboardScreen';
 import { colors } from './src/constants';
+import { AuthProvider } from './src/contexts/AuthContext';
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('Welcome');
@@ -26,7 +29,7 @@ function App() {
     },
     goBack: () => {
       console.log('Going back');
-      if (currentScreen === 'LoginScreen' || currentScreen === 'RegisterScreen') {
+      if (currentScreen === 'LoginScreen' || currentScreen === 'RegisterScreen' || currentScreen === 'ForgotPassword') {
         setCurrentScreen('Welcome');
       }
     },
@@ -38,6 +41,10 @@ function App() {
         return <LoginScreen navigation={navigation} />;
       case 'RegisterScreen':
         return <RegisterScreen navigation={navigation} />;
+      case 'ForgotPassword':
+        return <ForgotPasswordScreen navigation={navigation} />;
+      case 'Dashboard':
+        return <DashboardScreen navigation={navigation} />;
       case 'Welcome':
       default:
         return <WelcomeScreen navigation={navigation} />;
@@ -45,13 +52,15 @@ function App() {
   };
 
   return (
-    <SafeAreaProvider>
-      <StatusBar 
-        barStyle="dark-content" 
-        backgroundColor={colors.background}
-      />
-      {renderCurrentScreen()}
-    </SafeAreaProvider>
+    <AuthProvider>
+      <SafeAreaProvider>
+        <StatusBar 
+          barStyle="dark-content" 
+          backgroundColor={colors.background}
+        />
+        {renderCurrentScreen()}
+      </SafeAreaProvider>
+    </AuthProvider>
   );
 }
 

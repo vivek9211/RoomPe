@@ -18,12 +18,15 @@ import {
   validateRequired,
   validatePhoneNumber
 } from '../../utils/validation';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface RegisterScreenProps {
   navigation: any; // Replace with proper navigation type
 }
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
+  const { signUp } = useAuth();
+  
   // Form fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -77,15 +80,12 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise<void>(resolve => setTimeout(resolve, 2000));
+      // Use Firebase authentication
+      await signUp(email, password, fullName);
       
-      // TODO: Implement actual registration logic
-      console.log('Registration attempt:', { 
+      console.log('Registration successful:', { 
         fullName, 
         email, 
-        password, 
-        phone, 
         userType: isOwner ? 'Owner' : 'Tenant' 
       });
       
@@ -99,8 +99,8 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
           }
         ]
       );
-    } catch (error) {
-      Alert.alert('Registration Failed', 'Unable to create account. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Registration Failed', error.message);
     } finally {
       setIsLoading(false);
     }
