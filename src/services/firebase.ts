@@ -1,6 +1,5 @@
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
-import { User, UserRole, UserStatus, CreateUserData } from '../types/user.types';
+import { UserRole } from '../types/user.types';
 
 // Initialize Firebase (this happens automatically when the app starts)
 // The google-services.json file in android/app/ will be used for configuration
@@ -11,9 +10,6 @@ export interface AuthUser {
   displayName: string | null;
   photoURL: string | null;
 }
-
-// Use the existing User type from user.types.ts
-export type UserProfile = User;
 
 export interface LoginCredentials {
   email: string;
@@ -27,17 +23,13 @@ export interface RegisterCredentials extends LoginCredentials {
   role: UserRole;
 }
 
-class FirebaseService {
-  private get usersCollection() {
-    return firestore().collection('users');
-  }
-
-  // Check if Firebase is properly initialized
+class FirebaseAuthService {
+  // Check if Firebase Auth is properly initialized
   isFirebaseInitialized(): boolean {
     try {
-      return !!firestore && !!auth;
+      return !!auth;
     } catch (error) {
-      console.error('Firebase initialization check failed:', error);
+      console.error('Firebase Auth initialization check failed:', error);
       return false;
     }
   }
@@ -53,79 +45,6 @@ class FirebaseService {
       displayName: user.displayName,
       photoURL: user.photoURL,
     };
-  }
-
-  // Get user profile from Firestore
-  async getUserProfile(uid: string): Promise<UserProfile | null> {
-    try {
-      const doc = await this.usersCollection.doc(uid).get();
-      if (doc.exists()) {
-        const data = doc.data();
-        return {
-          uid: doc.id,
-          email: data?.email || '',
-          name: data?.name || '',
-          phone: data?.phone || '',
-          role: data?.role || UserRole.TENANT,
-          status: data?.status || UserStatus.ACTIVE,
-          createdAt: data?.createdAt || firestore.Timestamp.now(),
-          updatedAt: data?.updatedAt || firestore.Timestamp.now(),
-          isActive: data?.isActive ?? true,
-          emailVerified: data?.emailVerified ?? false,
-          phoneVerified: data?.phoneVerified ?? false,
-        } as User;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      throw new Error('Failed to fetch user profile');
-    }
-  }
-
-  // Create user profile in Firestore
-  async createUserProfile(userData: Omit<UserProfile, 'createdAt' | 'updatedAt'>): Promise<void> {
-    try {
-      // Ensure Firebase is properly initialized
-      if (!this.isFirebaseInitialized()) {
-        throw new Error('Firebase is not properly initialized');
-      }
-
-      const userDoc = {
-        ...userData,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      };
-      
-      console.log('Creating user profile with data:', userDoc);
-      
-      const docRef = this.usersCollection.doc(userData.uid);
-      await docRef.set(userDoc);
-      
-      console.log('User profile created successfully');
-    } catch (error: any) {
-      console.error('Error creating user profile:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack
-      });
-      throw new Error(`Failed to create user profile: ${error.message}`);
-    }
-  }
-
-  // Update user profile in Firestore
-  async updateUserProfile(uid: string, updates: Partial<UserProfile>): Promise<void> {
-    try {
-      const updateData = {
-        ...updates,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      };
-      
-      await this.usersCollection.doc(uid).update(updateData);
-    } catch (error) {
-      console.error('Error updating user profile:', error);
-      throw new Error('Failed to update user profile');
-    }
   }
 
   // Sign in with email and password
@@ -164,19 +83,6 @@ class FirebaseService {
           displayName: credentials.displayName,
         });
       }
-
-      // Create user profile in Firestore
-      await this.createUserProfile({
-        uid: user.uid,
-        email: credentials.email,
-        name: credentials.name,
-        phone: credentials.phone,
-        role: credentials.role,
-        status: UserStatus.ACTIVE,
-        isActive: true,
-        emailVerified: false,
-        phoneVerified: false,
-      });
       
       return {
         uid: user.uid,
@@ -202,6 +108,76 @@ class FirebaseService {
   async resetPassword(email: string): Promise<void> {
     try {
       await auth().sendPasswordResetEmail(email);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Update user profile in Firebase Auth
+  async updateAuthProfile(updates: { displayName?: string; photoURL?: string }): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.updateProfile(updates);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Update user email
+  async updateEmail(newEmail: string): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.updateEmail(newEmail);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Update user password
+  async updatePassword(newPassword: string): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.updatePassword(newPassword);
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Delete user account
+  async deleteUser(): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.delete();
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Send email verification
+  async sendEmailVerification(): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      await user.sendEmailVerification();
     } catch (error: any) {
       throw this.handleAuthError(error);
     }
@@ -252,6 +228,12 @@ class FirebaseService {
       case 'auth/network-request-failed':
         message = 'Network error. Please check your connection.';
         break;
+      case 'auth/requires-recent-login':
+        message = 'This operation requires recent authentication. Please sign in again.';
+        break;
+      case 'auth/invalid-credential':
+        message = 'Invalid credentials.';
+        break;
       default:
         message = error.message || message;
     }
@@ -260,29 +242,29 @@ class FirebaseService {
   }
 }
 
-export const firebaseService = new FirebaseService();
+export const firebaseAuthService = new FirebaseAuthService();
 
-// Debug function to test Firebase initialization
-export const testFirebaseConnection = async () => {
+// Debug function to test Firebase Auth connection
+export const testFirebaseAuthConnection = async () => {
   try {
-    console.log('Testing Firebase connection...');
+    console.log('Testing Firebase Auth connection...');
     
-    if (!firebaseService.isFirebaseInitialized()) {
-      console.error('Firebase is not initialized');
+    if (!firebaseAuthService.isFirebaseInitialized()) {
+      console.error('Firebase Auth is not initialized');
       return false;
     }
     
-    console.log('Firebase is initialized');
+    console.log('Firebase Auth is initialized');
     
-    // Test Firestore connection by trying to access a collection
-    const testCollection = firestore().collection('test');
-    console.log('Firestore collection access successful');
+    // Test Firebase Auth connection by trying to access current user
+    const currentUser = auth().currentUser;
+    console.log('Firebase Auth access successful');
     
     return true;
   } catch (error: any) {
-    console.error('Firebase connection test failed:', error);
+    console.error('Firebase Auth connection test failed:', error);
     return false;
   }
 };
 
-export default firebaseService;
+export default firebaseAuthService;

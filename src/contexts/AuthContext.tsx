@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import firebaseService, { AuthUser, UserProfile } from '../services/firebase';
+import firebaseAuthService, { AuthUser } from '../services/firebase';
+import firestoreService from '../services/firestore';
+import { User } from '../types/user.types';
 
 interface AuthContextType {
   user: AuthUser | null;
-  userProfile: UserProfile | null;
+  userProfile: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, phone: string, role: 'tenant' | 'owner') => Promise<void>;
@@ -20,13 +22,13 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch user profile from Firestore
   const fetchUserProfile = async (uid: string) => {
     try {
-      const profile = await firebaseService.getUserProfile(uid);
+      const profile = await firestoreService.getUserProfile(uid);
       setUserProfile(profile);
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -43,7 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Listen for authentication state changes
-    const unsubscribe = firebaseService.onAuthStateChanged(async (user: AuthUser | null) => {
+    const unsubscribe = firebaseAuthService.onAuthStateChanged(async (user: AuthUser | null) => {
       setUser(user);
       
       if (user) {
@@ -62,7 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await firebaseService.signInWithEmailAndPassword({ email, password });
+      await firebaseAuthService.signInWithEmailAndPassword({ email, password });
     } catch (error) {
       throw error;
     }
@@ -70,13 +72,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signUp = async (email: string, password: string, name: string, phone: string, role: 'tenant' | 'owner') => {
     try {
-      await firebaseService.createUserWithEmailAndPassword({ 
+      // Create user in Firebase Auth
+      const authUser = await firebaseAuthService.createUserWithEmailAndPassword({ 
         email, 
         password, 
         name,
         phone,
         role: role as any,
         displayName: name
+      });
+
+      // Create user profile in Firestore
+      await firestoreService.createUserProfile({
+        uid: authUser.uid,
+        email,
+        name,
+        phone,
+        role: role as any,
       });
     } catch (error) {
       throw error;
@@ -85,7 +97,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
-      await firebaseService.signOut();
+      await firebaseAuthService.signOut();
     } catch (error) {
       throw error;
     }
@@ -93,7 +105,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const resetPassword = async (email: string) => {
     try {
-      await firebaseService.resetPassword(email);
+      await firebaseAuthService.resetPassword(email);
     } catch (error) {
       throw error;
     }
