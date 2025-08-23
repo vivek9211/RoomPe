@@ -63,3 +63,137 @@ Energetic, engaging, appeals to younger users
 🟣 Violet 400 — #A78BFA
 
 Can be used in onboarding or referral sections to add visual interest
+
+
+Collections: 
+
+🏗️ Recommended Collection & Document Structure
+
+Here’s a scalable structure tailored for RoomPe:
+
+🔹 1. users (All users: tenants & owners)
+
+Authenticated via Firebase Auth — stored by UID
+
+Document ID: user UID from Firebase Auth
+Fields:
+
+{
+  "name": "Rahul Sharma",
+  "phone": "+919876543210",
+  "role": "tenant", // or "owner"
+  "email": "rahul@example.com",
+  "profilePhoto": "https://...",
+  "createdAt": Timestamp,
+  "isActive": true
+}
+
+🔹 2. properties (PGs / Buildings / Flats)
+
+Document ID: auto or property_<uuid>
+
+{
+  "name": "Green View PG",
+  "ownerId": "uid_of_owner",
+  "location": {
+    "address": "12 MG Road, Bangalore",
+    "lat": 12.9716,
+    "lng": 77.5946
+  },
+  "type": "pg", // or "flat", "apartment"
+  "totalRooms": 10,
+  "availableRooms": 4,
+  "createdAt": Timestamp
+}
+
+🔹 3. rooms (Rooms within a property)
+
+Document ID: room_<uuid>
+
+{
+  "propertyId": "property_123",
+  "roomNumber": "101-A",
+  "capacity": 2,
+  "occupied": 1,
+  "rent": 8500,
+  "tenantIds": ["uid_abc123"], // active tenants in this room
+  "isAvailable": false
+}
+
+🔹 4. tenants (Tenant-specific data)
+
+Document ID: tenant_<userUID>
+
+{
+  "userId": "uid_of_user",
+  "roomId": "room_123",
+  "propertyId": "property_456",
+  "agreementStart": "2025-01-01",
+  "agreementEnd": "2025-12-31",
+  "rent": 8500,
+  "depositPaid": true,
+  "status": "active" // or "left", "pending"
+}
+
+
+You can merge this into users if you're not planning to separate tenant logic deeply.
+
+🔹 5. payments (Rent transactions)
+
+Document ID: payment_<uuid>
+
+{
+  "tenantId": "uid_of_user",
+  "propertyId": "property_123",
+  "roomId": "room_101",
+  "amount": 8500,
+  "month": "2025-08",
+  "status": "paid", // or "pending", "failed"
+  "transactionId": "txn_abc123",
+  "paymentMethod": "UPI",
+  "paidAt": Timestamp
+}
+
+
+You can index by tenantId and month for history & reminders.
+
+🔹 6. maintenance_requests (Optional)
+
+Document ID: ticket_<uuid>
+
+{
+  "roomId": "room_101",
+  "tenantId": "uid_123",
+  "propertyId": "property_123",
+  "title": "Leaking tap",
+  "description": "Water tap is leaking in bathroom.",
+  "status": "open", // or "in_progress", "closed"
+  "createdAt": Timestamp,
+  "resolvedAt": null
+}
+
+🔹 7. notifications (Optional per-user)
+
+Sub-collection under users/<uid>/notifications:
+
+{
+  "type": "rent_due",
+  "message": "Your rent for August is due",
+  "seen": false,
+  "createdAt": Timestamp
+}
+
+🔐 Security Rules Tip (High-level):
+match /users/{userId} {
+  allow read, write: if request.auth.uid == userId;
+}
+
+match /payments/{paymentId} {
+  allow create: if request.auth.uid == request.resource.data.tenantId;
+  allow read: if resource.data.tenantId == request.auth.uid;
+}
+
+match /properties/{propertyId} {
+  allow read: if true;
+  allow write: if get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "owner";
+}
