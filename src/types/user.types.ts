@@ -1,4 +1,5 @@
 import { Timestamp } from '@react-native-firebase/firestore';
+import { EmergencyContact, NotificationPreferences, Location } from './common.types';
 
 // User roles enumeration
 export enum UserRole {
@@ -15,36 +16,8 @@ export enum UserStatus {
   PENDING_VERIFICATION = 'pending_verification'
 }
 
-// Location interface
-export interface Location {
-  address: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  coordinates?: {
-    lat: number;
-    lng: number;
-  };
-}
-
-// Emergency contact interface
-export interface EmergencyContact {
-  name: string;
-  phone: string;
-  relationship: string;
-  email?: string;
-}
-
-// Notification preferences interface
-export interface NotificationPreferences {
-  email: boolean;
-  push: boolean;
-  sms: boolean;
-  rentReminders: boolean;
-  maintenanceUpdates: boolean;
-  paymentConfirmations: boolean;
-}
+// Re-export common types
+export type { EmergencyContact, NotificationPreferences, Location };
 
 // User preferences interface
 export interface UserPreferences {

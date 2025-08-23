@@ -1,4 +1,5 @@
 import { Timestamp } from '@react-native-firebase/firestore';
+import { EmergencyContact, PaymentStatus } from './common.types';
 
 // Tenant status enumeration
 export enum TenantStatus {
@@ -20,14 +21,8 @@ export enum AgreementStatus {
   RENEWED = 'renewed'
 }
 
-// Payment status enumeration
-export enum PaymentStatus {
-  PAID = 'paid',
-  PENDING = 'pending',
-  OVERDUE = 'overdue',
-  PARTIAL = 'partial',
-  WAIVED = 'waived'
-}
+// Re-export common PaymentStatus
+export { PaymentStatus };
 
 // Base tenant interface with required fields
 export interface BaseTenant {
@@ -68,14 +63,8 @@ export interface UpdateTenantData {
   notes?: string;
 }
 
-// Emergency contact interface
-export interface EmergencyContact {
-  name: string;
-  phone: string;
-  relationship: string;
-  email?: string;
-  address?: string;
-}
+// Re-export common EmergencyContact
+export type { EmergencyContact };
 
 // Tenant document interface
 export interface TenantDocument {
