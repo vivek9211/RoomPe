@@ -12,6 +12,7 @@ import {
 } from 'react-native-safe-area-context';
 import WelcomeScreen from './src/screens/auth/WelcomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
+import RegisterScreen from './src/screens/auth/RegisterScreen';
 import { colors } from './src/constants';
 
 function App() {
@@ -25,7 +26,7 @@ function App() {
     },
     goBack: () => {
       console.log('Going back');
-      if (currentScreen === 'LoginScreen') {
+      if (currentScreen === 'LoginScreen' || currentScreen === 'RegisterScreen') {
         setCurrentScreen('Welcome');
       }
     },
@@ -35,6 +36,8 @@ function App() {
     switch (currentScreen) {
       case 'LoginScreen':
         return <LoginScreen navigation={navigation} />;
+      case 'RegisterScreen':
+        return <RegisterScreen navigation={navigation} />;
       case 'Welcome':
       default:
         return <WelcomeScreen navigation={navigation} />;
