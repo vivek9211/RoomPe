@@ -80,12 +80,13 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      // Use Firebase authentication
-      await signUp(email, password, fullName);
+      // Use Firebase authentication with Firestore
+      await signUp(email, password, fullName, phone, isOwner ? 'owner' : 'tenant');
       
       console.log('Registration successful:', { 
         fullName, 
         email, 
+        phone,
         userType: isOwner ? 'Owner' : 'Tenant' 
       });
       
