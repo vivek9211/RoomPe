@@ -1,45 +1,55 @@
 /**
- * Sample React Native App
+ * RoomPe - Rent Management Application
  * https://github.com/facebook/react-native
  *
  * @format
  */
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import React, { useState } from 'react';
+import { StatusBar } from 'react-native';
 import {
   SafeAreaProvider,
-  useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import WelcomeScreen from './src/screens/auth/WelcomeScreen';
+import LoginScreen from './src/screens/auth/LoginScreen';
+import { colors } from './src/constants';
 
 function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+  const [currentScreen, setCurrentScreen] = useState('Welcome');
+
+  // Navigation object that handles screen transitions
+  const navigation = {
+    navigate: (screen: string) => {
+      console.log(`Navigating to ${screen}`);
+      setCurrentScreen(screen);
+    },
+    goBack: () => {
+      console.log('Going back');
+      if (currentScreen === 'LoginScreen') {
+        setCurrentScreen('Welcome');
+      }
+    },
+  };
+
+  const renderCurrentScreen = () => {
+    switch (currentScreen) {
+      case 'LoginScreen':
+        return <LoginScreen navigation={navigation} />;
+      case 'Welcome':
+      default:
+        return <WelcomeScreen navigation={navigation} />;
+    }
+  };
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor={colors.background}
+      />
+      {renderCurrentScreen()}
     </SafeAreaProvider>
   );
 }
-
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
 
 export default App;
