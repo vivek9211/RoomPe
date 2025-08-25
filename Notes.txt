@@ -197,3 +197,24 @@ match /properties/{propertyId} {
   allow read: if true;
   allow write: if get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "owner";
 }
+
+
+async function googleSignIn(params) {
+  try {
+    const auth = getAuth();
+    GoogleSignIn.configure({
+      offlineAccess: false,
+      webClientId: FIRE_BASE_WEB_CLIENT_ID,
+      scopes: ['profile', 'email'],
+    });
+    await GoogleSignin.hasPlayServices()
+    const signInResult = await GoogleSignin.signIn();
+    const idToken = signInResult.data?.idToken;
+    const googleCredentials = GoogleAuthProvider.credential(idToken);
+    const userCredentials = await SigninWithCredential(auth, googleCredentials);
+    const user = userCredentials.user;
+    console.log(user);
+  } catch (error) {
+    console.log(error);
+  }
+}
