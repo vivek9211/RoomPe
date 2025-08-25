@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import firebaseAuthService, { AuthUser } from '../services/firebase';
 import firestoreService from '../services/firestore';
+import googleSignInService from '../services/googleSignIn';
 import { User } from '../types/user.types';
 
 interface AuthContextType {
@@ -8,6 +9,7 @@ interface AuthContextType {
   userProfile: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signUp: (email: string, password: string, name: string, phone: string, role: 'tenant' | 'owner') => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -70,6 +72,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      const result = await googleSignInService.signInWithGoogle();
+      if (!result.success) {
+        throw new Error(result.error || 'Google Sign-In failed');
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const signUp = async (email: string, password: string, name: string, phone: string, role: 'tenant' | 'owner') => {
     try {
       // Create user in Firebase Auth
@@ -116,6 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     userProfile,
     loading,
     signIn,
+    signInWithGoogle,
     signUp,
     signOut,
     resetPassword,

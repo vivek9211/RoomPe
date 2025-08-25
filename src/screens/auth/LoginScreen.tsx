@@ -19,7 +19,7 @@ interface LoginScreenProps {
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -63,16 +63,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     setIsGoogleLoading(true);
     
     try {
-      // Simulate Google authentication
-      await new Promise<void>(resolve => setTimeout(resolve, 2000));
+      await signInWithGoogle();
       
-      // TODO: Implement actual Google authentication
-      console.log('Google login attempt');
+      console.log('Google login successful');
       
       // Navigate to main app
       navigation.navigate('Dashboard');
-    } catch (error) {
-      Alert.alert('Google Login Failed', 'Unable to sign in with Google. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Google Login Failed', error.message || 'Unable to sign in with Google. Please try again.');
     } finally {
       setIsGoogleLoading(false);
     }
