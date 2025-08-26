@@ -52,7 +52,7 @@ const PhoneVerificationScreen: React.FC<PhoneVerificationScreenProps> = ({ navig
         <Text style={styles.title}>Verify your phone</Text>
         <Input label="Phone number" placeholder="Enter phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
         <Button title="Send code" onPress={handleSendCode} loading={sending} variant="primary" size="large" style={styles.button} />
-        <Input label="Verification code" placeholder="Enter code" value={code} onChangeText={setCode} keyboardType="number-pad" />
+        <Input label="Verification code" placeholder="Enter code" value={code} onChangeText={setCode} keyboardType="numeric" />
         <Button title="Verify" onPress={handleVerify} loading={verifying} variant="secondary" size="large" />
       </View>
     </SafeAreaView>

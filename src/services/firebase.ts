@@ -3,11 +3,6 @@ import { UserRole } from '../types/user.types';
 import firestoreService from './firestore';
 import { emailVerificationActionCodeSettings, passwordResetActionCodeSettings } from '../config/firebaseAuth';
 
-// Prefer device language for system emails
-try {
-  auth().useDeviceLanguage();
-} catch {}
-
 // Initialize Firebase (this happens automatically when the app starts)
 // The google-services.json file in android/app/ will be used for configuration
 
@@ -223,8 +218,27 @@ class FirebaseAuthService {
   // Initiate phone verification: returns a verificationId
   async initiatePhoneVerification(phoneNumber: string): Promise<string> {
     try {
-      // verifyPhoneNumber provides a verificationId without changing auth state
-      const verificationId = await auth().verifyPhoneNumber(phoneNumber);
+      const normalizedPhone = phoneNumber.trim();
+      const verificationId = await new Promise<string>((resolve, reject) => {
+        const verifier = auth().verifyPhoneNumber(normalizedPhone);
+        verifier.on('state_changed', (snapshot) => {
+          switch (snapshot.state) {
+            case auth.PhoneAuthState.CODE_SENT:
+              resolve(snapshot.verificationId || '');
+              break;
+            case auth.PhoneAuthState.ERROR:
+              reject(snapshot.error);
+              break;
+            case auth.PhoneAuthState.AUTO_VERIFY_TIMEOUT:
+              if (snapshot.verificationId) {
+                resolve(snapshot.verificationId);
+              }
+              break;
+            default:
+              break;
+          }
+        });
+      });
       return verificationId;
     } catch (error: any) {
       throw this.handleAuthError(error);
