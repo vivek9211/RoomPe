@@ -18,6 +18,7 @@ interface AuthContextType {
   isEmailVerified: (reload?: boolean) => Promise<boolean>;
   initiatePhoneVerification: (phoneNumber: string) => Promise<string>;
   confirmPhoneVerification: (verificationId: string, code: string) => Promise<void>;
+  completeGoogleOnboarding: (role: 'tenant' | 'owner', opts?: { phone?: string; nameOverride?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -166,6 +167,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const completeGoogleOnboarding = async (role: 'tenant' | 'owner', opts?: { phone?: string; nameOverride?: string }) => {
+    if (!user?.uid) throw new Error('Not authenticated');
+    const email = user.email || '';
+    const name = opts?.nameOverride || user.displayName || email.split('@')[0] || 'User';
+    const phone = opts?.phone || '';
+
+    try {
+      // If profile exists, just update role/phone/name; else create
+      const existing = await firestoreService.getUserProfile(user.uid);
+      if (existing) {
+        await firestoreService.updateUserProfile(user.uid, { role: role as any, phone, name });
+      } else {
+        await firestoreService.createUserProfile({
+          uid: user.uid,
+          email,
+          name,
+          phone,
+          role: role as any,
+        });
+      }
+      await refreshUserProfile();
+    } catch (e) {
+      throw e;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     userProfile,
@@ -180,6 +207,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isEmailVerified,
     initiatePhoneVerification,
     confirmPhoneVerification,
+    completeGoogleOnboarding,
   };
 
   return (

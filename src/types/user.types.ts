@@ -59,6 +59,7 @@ export interface UpdateUserData {
   dateOfBirth?: Timestamp;
   emergencyContact?: EmergencyContact;
   preferences?: UserPreferences;
+  role?: UserRole;
 }
 
 // Complete user model with all fields

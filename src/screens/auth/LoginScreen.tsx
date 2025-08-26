@@ -14,13 +14,14 @@ import { Button, Input, SocialButton } from '../../components/common';
 import { validateEmail, validatePassword } from '../../utils/validation';
 import { useAuth } from '../../contexts/AuthContext';
 import firestoreService from '../../services/firestore';
+import auth from '@react-native-firebase/auth';
 
 interface LoginScreenProps {
   navigation: any; // Replace with proper navigation type
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const { signIn, signInWithGoogle, isEmailVerified } = useAuth();
+  const { signIn, signInWithGoogle, isEmailVerified, refreshUserProfile, user, userProfile } = useAuth() as any;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -69,10 +70,33 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     try {
       await signInWithGoogle();
       
-      console.log('Google login successful');
+      // Get current user directly from Firebase Auth to avoid stale context
+      const currentUser = auth().currentUser;
+      if (!currentUser?.uid) {
+        throw new Error('No authenticated user after Google sign-in');
+      }
       
-      // Navigate to main app
-      navigation.navigate('Dashboard');
+      // Get the latest profile directly from Firestore
+      let profile = null;
+      try {
+        profile = await firestoreService.getUserProfile(currentUser.uid);
+        console.log('Profile fetched:', profile);
+      } catch (error) {
+        console.log('Error fetching profile:', error);
+      }
+
+      const roleValue = (profile && (profile as any).role) as string | undefined;
+      const hasValidRole = roleValue === 'tenant' || roleValue === 'owner';
+      
+      console.log('Role value:', roleValue, 'Has valid role:', hasValidRole);
+
+      if (!profile || !hasValidRole) {
+        console.log('Navigating to RoleSelection - Profile:', !!profile, 'Role:', roleValue);
+        navigation.navigate('RoleSelection');
+      } else {
+        console.log('Navigating to Dashboard - Profile exists with role:', roleValue);
+        navigation.navigate('Dashboard');
+      }
     } catch (error: any) {
       Alert.alert('Google Login Failed', error.message || 'Unable to sign in with Google. Please try again.');
     } finally {

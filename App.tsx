@@ -17,6 +17,7 @@ import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
 import EmailVerificationScreen from './src/screens/auth/EmailVerificationScreen';
 import PhoneVerificationScreen from './src/screens/auth/PhoneVerificationScreen';
 import DashboardScreen from './src/screens/dashboard/DashboardScreen';
+import RoleSelectionScreen from './src/screens/auth/RoleSelectionScreen';
 import { colors } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
 
@@ -49,6 +50,8 @@ function App() {
         return <EmailVerificationScreen navigation={navigation} />;
       case 'PhoneVerification':
         return <PhoneVerificationScreen navigation={navigation} />;
+      case 'RoleSelection':
+        return <RoleSelectionScreen navigation={navigation} />;
       case 'Dashboard':
         return <DashboardScreen navigation={navigation} />;
       case 'Welcome':
