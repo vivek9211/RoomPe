@@ -14,6 +14,10 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  sendEmailVerification: () => Promise<void>;
+  isEmailVerified: (reload?: boolean) => Promise<boolean>;
+  initiatePhoneVerification: (phoneNumber: string) => Promise<string>;
+  confirmPhoneVerification: (verificationId: string, code: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -103,6 +107,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         phone,
         role: role as any,
       });
+
+      // Send email verification after successful signup
+      try {
+        await firebaseAuthService.sendEmailVerification();
+      } catch (e) {
+        console.warn('Failed to send email verification:', e);
+      }
     } catch (error) {
       throw error;
     }
@@ -124,6 +135,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const sendEmailVerification = async () => {
+    await firebaseAuthService.sendEmailVerification();
+  };
+
+  const isEmailVerified = async (reload: boolean = true) => {
+    const verified = await firebaseAuthService.isEmailVerified({ reload });
+    if (user?.uid) {
+      try {
+        await firestoreService.updateEmailVerification(user.uid, verified);
+      } catch (e) {
+        console.warn('Failed updating emailVerified in Firestore:', e);
+      }
+    }
+    return verified;
+  };
+
+  const initiatePhoneVerification = async (phoneNumber: string) => {
+    return await firebaseAuthService.initiatePhoneVerification(phoneNumber);
+  };
+
+  const confirmPhoneVerification = async (verificationId: string, code: string) => {
+    await firebaseAuthService.confirmPhoneVerification(verificationId, code);
+    if (user?.uid) {
+      try {
+        await firestoreService.updateUserProfile(user.uid, { phone: userProfile?.phone || '' });
+      } catch (e) {
+        console.warn('Failed to touch user profile after phone verification:', e);
+      }
+    }
+  };
+
   const value: AuthContextType = {
     user,
     userProfile,
@@ -134,6 +176,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signOut,
     resetPassword,
     refreshUserProfile,
+    sendEmailVerification,
+    isEmailVerified,
+    initiatePhoneVerification,
+    confirmPhoneVerification,
   };
 
   return (

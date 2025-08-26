@@ -90,16 +90,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
         userType: isOwner ? 'Owner' : 'Tenant' 
       });
       
-      Alert.alert(
-        'Registration Successful!',
-        `Welcome ${fullName}! Your ${isOwner ? 'Owner' : 'Tenant'} account has been created successfully.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Dashboard')
-          }
-        ]
-      );
+      navigation.navigate('EmailVerification');
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message);
     } finally {

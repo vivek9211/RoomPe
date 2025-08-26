@@ -14,6 +14,8 @@ import WelcomeScreen from './src/screens/auth/WelcomeScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
+import EmailVerificationScreen from './src/screens/auth/EmailVerificationScreen';
+import PhoneVerificationScreen from './src/screens/auth/PhoneVerificationScreen';
 import DashboardScreen from './src/screens/dashboard/DashboardScreen';
 import { colors } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
@@ -43,6 +45,10 @@ function App() {
         return <RegisterScreen navigation={navigation} />;
       case 'ForgotPassword':
         return <ForgotPasswordScreen navigation={navigation} />;
+      case 'EmailVerification':
+        return <EmailVerificationScreen navigation={navigation} />;
+      case 'PhoneVerification':
+        return <PhoneVerificationScreen navigation={navigation} />;
       case 'Dashboard':
         return <DashboardScreen navigation={navigation} />;
       case 'Welcome':

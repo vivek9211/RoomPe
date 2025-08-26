@@ -13,13 +13,14 @@ import { colors, fonts, dimensions } from '../../constants';
 import { Button, Input, SocialButton } from '../../components/common';
 import { validateEmail, validatePassword } from '../../utils/validation';
 import { useAuth } from '../../contexts/AuthContext';
+import firestoreService from '../../services/firestore';
 
 interface LoginScreenProps {
   navigation: any; // Replace with proper navigation type
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, isEmailVerified } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -45,12 +46,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      // Use Firebase authentication
       await signIn(email, password);
-      
+
+      const verified = await isEmailVerified(true);
+      if (!verified) {
+        navigation.navigate('EmailVerification');
+        return;
+      }
+
       console.log('Login successful');
-      
-      // Navigate to main app
       navigation.navigate('Dashboard');
     } catch (error: any) {
       Alert.alert('Login Failed', error.message);
