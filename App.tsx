@@ -18,7 +18,6 @@ import EmailVerificationScreen from './src/screens/auth/EmailVerificationScreen'
 import PhoneVerificationScreen from './src/screens/auth/PhoneVerificationScreen';
 import DashboardScreen from './src/screens/dashboard/DashboardScreen';
 import RoleSelectionScreen from './src/screens/auth/RoleSelectionScreen';
-import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
 import { colors } from './src/constants';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
@@ -40,13 +39,14 @@ function AppContent() {
     },
   };
 
-  // Auto-navigate based on auth state and onboarding status
+  // Auto-navigate based on auth state (onboarding disabled)
   useEffect(() => {
     if (user && userProfile) {
       if (!userProfile.role) {
         setCurrentScreen('RoleSelection');
       } else if (!userProfile.onboardingCompleted) {
-        setCurrentScreen('Onboarding');
+        // Skip onboarding and go directly to Dashboard
+        setCurrentScreen('Dashboard');
       } else {
         setCurrentScreen('Dashboard');
       }
@@ -71,8 +71,7 @@ function AppContent() {
         return <PhoneVerificationScreen navigation={navigation} />;
       case 'RoleSelection':
         return <RoleSelectionScreen navigation={navigation} />;
-      case 'Onboarding':
-        return <OnboardingScreen navigation={navigation} />;
+      // Onboarding removed
       case 'Dashboard':
         return <DashboardScreen navigation={navigation} />;
       case 'Welcome':

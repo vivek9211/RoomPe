@@ -95,8 +95,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         console.log('Navigating to RoleSelection - Profile:', !!profile, 'Role:', roleValue);
         navigation.navigate('RoleSelection');
       } else if (!onboardingCompleted) {
-        console.log('Navigating to Onboarding - Profile exists with role but onboarding not completed');
-        navigation.navigate('Onboarding');
+        console.log('Skipping Onboarding - navigating to Dashboard');
+        navigation.navigate('Dashboard');
       } else {
         console.log('Navigating to Dashboard - Profile exists with role and onboarding completed');
         navigation.navigate('Dashboard');
