@@ -106,20 +106,6 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
     try {
       setUploadingProfile(true);
 
-      // Test Firebase Storage connection first
-      console.log('Testing Firebase Storage connection...');
-      const storageTest = await imageService.testStorageUpload();
-      console.log('Storage test result:', storageTest);
-      
-      if (!storageTest.success) {
-        Alert.alert(
-          'Storage Connection Error',
-          `Firebase Storage is not accessible: ${storageTest.error}\n\nPlease check your internet connection and try again.`,
-          [{ text: 'OK', style: 'default' }]
-        );
-        return;
-      }
-
       // First check if permission is already granted
       const hasPermission = await imageService.checkStoragePermission();
       if (!hasPermission) {
@@ -231,20 +217,6 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
 
     try {
       setUploadingAadhaar(true);
-
-      // Test Firebase Storage connection first
-      console.log('Testing Firebase Storage connection for Aadhaar...');
-      const storageTest = await imageService.testStorageUpload();
-      console.log('Aadhaar storage test result:', storageTest);
-      
-      if (!storageTest.success) {
-        Alert.alert(
-          'Storage Connection Error',
-          `Firebase Storage is not accessible: ${storageTest.error}\n\nPlease check your internet connection and try again.`,
-          [{ text: 'OK', style: 'default' }]
-        );
-        return;
-      }
 
       // First check if permission is already granted
       const hasPermission = await imageService.checkStoragePermission();
@@ -397,7 +369,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
       <Input
         label="Occupation"
         placeholder="What do you do?"
-        value={formData.occupation}
+        value={formData.occupation || ''}
         onChangeText={(text) => updateField('occupation', text)}
         autoCapitalize="words"
         style={styles.input}
@@ -406,7 +378,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
       <Input
         label="Company"
         placeholder="Where do you work?"
-        value={formData.company}
+        value={formData.company || ''}
         onChangeText={(text) => updateField('company', text)}
         autoCapitalize="words"
         style={styles.input}

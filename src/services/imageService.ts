@@ -18,21 +18,17 @@ export interface ImagePickerOptions {
 }
 
 class ImageService {
-  // Check if Firebase is properly initialized
+  /**
+   * Verify that a Firebase app instance exists and is usable.
+   */
   async checkFirebaseInitialization(): Promise<boolean> {
     try {
       const apps = firebase.apps;
-      console.log('Firebase apps:', apps);
-      
       if (apps.length === 0) {
         console.error('No Firebase apps initialized');
         return false;
       }
-
-      const defaultApp = firebase.app();
-      console.log('Default Firebase app:', defaultApp.name);
-      console.log('Firebase options:', defaultApp.options);
-      
+      firebase.app();
       return true;
     } catch (error) {
       console.error('Firebase initialization check failed:', error);
@@ -40,7 +36,9 @@ class ImageService {
     }
   }
 
-  // Check if Firebase Storage is properly initialized
+  /**
+   * Verify that Firebase Storage is accessible in the current environment.
+   */
   async checkStorageAvailability(): Promise<boolean> {
     try {
       // First check if Firebase is initialized
@@ -50,12 +48,7 @@ class ImageService {
         return false;
       }
 
-      const storageInstance = storage();
-      console.log('Firebase Storage instance:', storageInstance);
-      
-      // Try to create a test reference
-      const testRef = storageInstance.ref('test');
-      console.log('Test reference created:', testRef.fullPath);
+      storage();
       
       return true;
     } catch (error) {
@@ -64,7 +57,9 @@ class ImageService {
     }
   }
 
-  // Request camera permissions for Android
+  /**
+   * Request camera permission on Android.
+   */
   async requestCameraPermission(): Promise<boolean> {
     if (Platform.OS === 'android') {
       try {
@@ -87,7 +82,9 @@ class ImageService {
     return true;
   }
 
-  // Check if storage permission is already granted
+  /**
+   * Check if storage/photo permission is currently granted on Android.
+   */
   async checkStoragePermission(): Promise<boolean> {
     if (Platform.OS === 'android') {
       try {
@@ -114,7 +111,9 @@ class ImageService {
     return true; // iOS doesn't need explicit permission for photo library
   }
 
-  // Request storage permissions for Android
+  /**
+   * Request storage/photo permission on Android.
+   */
   async requestStoragePermission(): Promise<boolean> {
     if (Platform.OS === 'android') {
       try {
@@ -157,7 +156,9 @@ class ImageService {
     return true; // iOS doesn't need explicit permission for photo library
   }
 
-  // Launch image picker with fallback for permission issues
+  /**
+   * Launch the image picker with sensible defaults.
+   */
   async pickImage(options: ImagePickerOptions = {}): Promise<ImagePickerResponse> {
     const defaultOptions: ImageLibraryOptions = {
       mediaType: 'photo',
@@ -183,39 +184,32 @@ class ImageService {
     }
   }
 
-  // Upload image to Firebase Storage
+  /**
+   * Upload an image file to Firebase Storage and return its download URL.
+   */
   async uploadImage(
     uri: string,
     path: string,
     metadata?: { contentType?: string; customMetadata?: Record<string, string> }
   ): Promise<ImageUploadResult> {
     try {
-      console.log('Starting upload for URI:', uri);
-      console.log('Upload path:', path);
-      
       // Create a reference to the file location
       const storageRef = storage().ref(path);
-      console.log('Storage reference created:', storageRef.fullPath);
       
       // Prepare metadata
       const uploadMetadata = {
         contentType: metadata?.contentType || 'image/jpeg',
         customMetadata: metadata?.customMetadata || {},
       };
-      console.log('Upload metadata:', uploadMetadata);
       
       // Upload the file
-      console.log('Starting file upload...');
       const task = storageRef.putFile(uri, uploadMetadata);
       
       // Wait for upload to complete
       await task;
-      console.log('File upload completed successfully');
       
       // Get the download URL
-      console.log('Getting download URL...');
       const url = await storageRef.getDownloadURL();
-      console.log('Download URL obtained:', url);
       
       return {
         success: true,
@@ -276,59 +270,11 @@ class ImageService {
     }
   }
 
-  // Test upload method to diagnose storage issues
-  async testStorageUpload(): Promise<ImageUploadResult> {
-    try {
-      console.log('Testing Firebase Storage upload...');
-      
-      // Check Firebase initialization
-      const isFirebaseInitialized = await this.checkFirebaseInitialization();
-      if (!isFirebaseInitialized) {
-        return {
-          success: false,
-          error: 'Firebase not properly initialized',
-        };
-      }
+  // Removed testStorageUpload used during debugging
 
-      // Check storage availability
-      const isStorageAvailable = await this.checkStorageAvailability();
-      if (!isStorageAvailable) {
-        return {
-          success: false,
-          error: 'Firebase Storage not available',
-        };
-      }
-
-      // Try to create a simple test reference
-      const testPath = `test/connection_test_${Date.now()}.txt`;
-      const testRef = storage().ref(testPath);
-      console.log('Test reference path:', testRef.fullPath);
-
-      // Try to upload a simple text file (this won't actually upload, just test the reference)
-      const testMetadata = {
-        contentType: 'text/plain',
-        customMetadata: {
-          test: 'true',
-          timestamp: new Date().toISOString(),
-        },
-      };
-
-      console.log('Test metadata:', testMetadata);
-      
-      return {
-        success: true,
-        url: testRef.fullPath,
-      };
-    } catch (error: any) {
-      console.error('Storage test failed:', error);
-      return {
-        success: false,
-        error: `Storage test failed: ${error.message}`,
-      };
-    }
-  }
-
-  // Fallback upload method with different path format
+  /**
+   * Attempt upload to basePath; if it fails, retry with a simplified unique fallback path.
+   */
   async uploadImageWithFallback(
     uri: string,
     basePath: string,
@@ -342,12 +288,10 @@ class ImageService {
       }
 
       // If original fails, try with a simpler path format
-      console.log('Original upload failed, trying fallback path...');
       const fallbackPath = `uploads/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
       
       const fallbackResult = await this.uploadImage(uri, fallbackPath, metadata);
       if (fallbackResult.success) {
-        console.log('Fallback upload successful with path:', fallbackPath);
         return fallbackResult;
       }
 
@@ -362,7 +306,9 @@ class ImageService {
     }
   }
 
-  // Upload profile image
+  /**
+   * Upload a user's profile image to a namespaced path.
+   */
   async uploadProfileImage(uri: string, userId: string): Promise<ImageUploadResult> {
     try {
       // Check if storage is available
@@ -375,7 +321,6 @@ class ImageService {
       }
 
       const path = `users/${userId}/profile/profile_${Date.now()}.jpg`;
-      console.log('Profile image upload path:', path);
       
       return this.uploadImageWithFallback(uri, path, {
         contentType: 'image/jpeg',
@@ -394,7 +339,9 @@ class ImageService {
     }
   }
 
-  // Upload Aadhaar image
+  /**
+   * Upload a user's Aadhaar image to a namespaced path.
+   */
   async uploadAadhaarImage(uri: string, userId: string): Promise<ImageUploadResult> {
     try {
       // Check if storage is available
@@ -407,7 +354,6 @@ class ImageService {
       }
 
       const path = `users/${userId}/documents/aadhaar_${Date.now()}.jpg`;
-      console.log('Aadhaar image upload path:', path);
       
       return this.uploadImageWithFallback(uri, path, {
         contentType: 'image/jpeg',
@@ -426,7 +372,9 @@ class ImageService {
     }
   }
 
-  // Delete image from Firebase Storage
+  /**
+   * Delete a file at the given Firebase Storage path.
+   */
   async deleteImage(path: string): Promise<boolean> {
     try {
       const storageRef = storage().ref(path);
@@ -438,7 +386,9 @@ class ImageService {
     }
   }
 
-  // Get image size in MB - improved for local files
+  /**
+   * Get image size in MB when available; returns 0 when unknown.
+   */
   getImageSize(uri: string): Promise<number> {
     return new Promise((resolve, reject) => {
       // For local files, we can't use XMLHttpRequest HEAD method
@@ -470,7 +420,9 @@ class ImageService {
     });
   }
 
-  // Check if file exists and is accessible
+  /**
+   * Basic check to see if a file at the provided URI is accessible.
+   */
   async checkFileAccess(uri: string): Promise<boolean> {
     try {
       if (uri.startsWith('file://') || uri.startsWith('content://')) {
@@ -499,7 +451,9 @@ class ImageService {
     }
   }
 
-  // Validate image before upload - improved validation
+  /**
+   * Validate that the URI is an image-like resource and appears accessible.
+   */
   async validateImage(uri: string): Promise<{ isValid: boolean; error?: string }> {
     try {
       // Check if it's a valid image URI first
