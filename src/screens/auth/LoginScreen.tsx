@@ -87,14 +87,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
       const roleValue = (profile && (profile as any).role) as string | undefined;
       const hasValidRole = roleValue === 'tenant' || roleValue === 'owner';
+      const onboardingCompleted = profile && (profile as any).onboardingCompleted === true;
       
-      console.log('Role value:', roleValue, 'Has valid role:', hasValidRole);
+      console.log('Role value:', roleValue, 'Has valid role:', hasValidRole, 'Onboarding completed:', onboardingCompleted);
 
       if (!profile || !hasValidRole) {
         console.log('Navigating to RoleSelection - Profile:', !!profile, 'Role:', roleValue);
         navigation.navigate('RoleSelection');
+      } else if (!onboardingCompleted) {
+        console.log('Navigating to Onboarding - Profile exists with role but onboarding not completed');
+        navigation.navigate('Onboarding');
       } else {
-        console.log('Navigating to Dashboard - Profile exists with role:', roleValue);
+        console.log('Navigating to Dashboard - Profile exists with role and onboarding completed');
         navigation.navigate('Dashboard');
       }
     } catch (error: any) {

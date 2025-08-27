@@ -5,7 +5,7 @@
  * @format
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import {
   SafeAreaProvider,
@@ -18,10 +18,12 @@ import EmailVerificationScreen from './src/screens/auth/EmailVerificationScreen'
 import PhoneVerificationScreen from './src/screens/auth/PhoneVerificationScreen';
 import DashboardScreen from './src/screens/dashboard/DashboardScreen';
 import RoleSelectionScreen from './src/screens/auth/RoleSelectionScreen';
+import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
 import { colors } from './src/constants';
-import { AuthProvider } from './src/contexts/AuthContext';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
-function App() {
+function AppContent() {
+  const { user, userProfile } = useAuth();
   const [currentScreen, setCurrentScreen] = useState('Welcome');
 
   // Navigation object that handles screen transitions
@@ -38,6 +40,23 @@ function App() {
     },
   };
 
+  // Auto-navigate based on auth state and onboarding status
+  useEffect(() => {
+    if (user && userProfile) {
+      if (!userProfile.role) {
+        setCurrentScreen('RoleSelection');
+      } else if (!userProfile.onboardingCompleted) {
+        setCurrentScreen('Onboarding');
+      } else {
+        setCurrentScreen('Dashboard');
+      }
+    } else if (user) {
+      setCurrentScreen('RoleSelection');
+    } else {
+      setCurrentScreen('Welcome');
+    }
+  }, [user, userProfile]);
+
   const renderCurrentScreen = () => {
     switch (currentScreen) {
       case 'LoginScreen':
@@ -52,6 +71,8 @@ function App() {
         return <PhoneVerificationScreen navigation={navigation} />;
       case 'RoleSelection':
         return <RoleSelectionScreen navigation={navigation} />;
+      case 'Onboarding':
+        return <OnboardingScreen navigation={navigation} />;
       case 'Dashboard':
         return <DashboardScreen navigation={navigation} />;
       case 'Welcome':
@@ -61,13 +82,21 @@ function App() {
   };
 
   return (
+    <>
+      <StatusBar 
+        barStyle="dark-content" 
+        backgroundColor={colors.background}
+      />
+      {renderCurrentScreen()}
+    </>
+  );
+}
+
+function App() {
+  return (
     <AuthProvider>
       <SafeAreaProvider>
-        <StatusBar 
-          barStyle="dark-content" 
-          backgroundColor={colors.background}
-        />
-        {renderCurrentScreen()}
+        <AppContent />
       </SafeAreaProvider>
     </AuthProvider>
   );

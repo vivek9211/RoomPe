@@ -124,21 +124,27 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
 
       // Check if user already exists
       if (profile && profile.role) {
-        // User already exists with a role, redirect to login
-        Alert.alert(
-          'Account Already Exists',
-          'An account with this Google email already exists. Please sign in instead.',
-          [
-            {
-              text: 'Go to Login',
-              onPress: () => {
-                // Sign out the Google user since they should use existing account
-                auth().signOut();
-                navigation.navigate('LoginScreen');
+        // User already exists with a role, check onboarding status
+        if (profile.onboardingCompleted) {
+          // User has completed onboarding, redirect to login
+          Alert.alert(
+            'Account Already Exists',
+            'An account with this Google email already exists. Please sign in instead.',
+            [
+              {
+                text: 'Go to Login',
+                onPress: () => {
+                  // Sign out the Google user since they should use existing account
+                  auth().signOut();
+                  navigation.navigate('LoginScreen');
+                }
               }
-            }
-          ]
-        );
+            ]
+          );
+        } else {
+          // User exists but hasn't completed onboarding, go to onboarding
+          navigation.navigate('Onboarding');
+        }
       } else {
         // New user or incomplete profile, go to RoleSelection
         navigation.navigate('RoleSelection');

@@ -6,6 +6,7 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
 import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
+import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 
 const Stack = createStackNavigator();
 
@@ -18,6 +19,7 @@ const AuthNavigator = () => {
       <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
       <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} />
       <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
     </Stack.Navigator>
   );
 };

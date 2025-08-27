@@ -177,7 +177,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // If profile exists, just update role/phone/name; else create
       const existing = await firestoreService.getUserProfile(user.uid);
       if (existing) {
-        await firestoreService.updateUserProfile(user.uid, { role: role as any, phone, name });
+        await firestoreService.updateUserProfile(user.uid, { 
+          role: role as any, 
+          phone, 
+          name,
+          onboardingCompleted: true 
+        });
       } else {
         await firestoreService.createUserProfile({
           uid: user.uid,
@@ -185,6 +190,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           name,
           phone,
           role: role as any,
+          onboardingCompleted: true,
         });
       }
       await refreshUserProfile();

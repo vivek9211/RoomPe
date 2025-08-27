@@ -21,7 +21,8 @@ const RoleSelectionScreen: React.FC<RoleSelectionScreenProps> = ({ navigation })
     try {
       setLoading(true);
       await completeGoogleOnboarding(role);
-      navigation.navigate('Dashboard');
+      // Navigate to onboarding instead of dashboard
+      navigation.navigate('Onboarding');
     } catch (e: any) {
       Alert.alert('Failed to complete setup', e.message || 'Please try again.');
     } finally {
