@@ -1,5 +1,7 @@
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { UserRole } from '../types/user.types';
+import firestoreService from './firestore';
+import { emailVerificationActionCodeSettings, passwordResetActionCodeSettings } from '../config/firebaseAuth';
 
 // Initialize Firebase (this happens automatically when the app starts)
 // The google-services.json file in android/app/ will be used for configuration
@@ -107,7 +109,11 @@ class FirebaseAuthService {
   // Reset password
   async resetPassword(email: string): Promise<void> {
     try {
-      await auth().sendPasswordResetEmail(email);
+      if (passwordResetActionCodeSettings) {
+        await auth().sendPasswordResetEmail(email, passwordResetActionCodeSettings);
+      } else {
+        await auth().sendPasswordResetEmail(email);
+      }
     } catch (error: any) {
       throw this.handleAuthError(error);
     }
@@ -177,7 +183,86 @@ class FirebaseAuthService {
         throw new Error('No authenticated user');
       }
 
-      await user.sendEmailVerification();
+      if (emailVerificationActionCodeSettings) {
+        await user.sendEmailVerification(emailVerificationActionCodeSettings);
+      } else {
+        await user.sendEmailVerification();
+      }
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Reload current user to refresh properties like emailVerified
+  async reloadCurrentUser(): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+      await user.reload();
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Check if the current user's email is verified (forces a reload if specified)
+  async isEmailVerified(options?: { reload?: boolean }): Promise<boolean> {
+    if (options?.reload) {
+      await this.reloadCurrentUser();
+    }
+    const user = auth().currentUser;
+    return !!user?.emailVerified;
+  }
+
+  // Initiate phone verification: returns a verificationId
+  async initiatePhoneVerification(phoneNumber: string): Promise<string> {
+    try {
+      const normalizedPhone = phoneNumber.trim();
+      const verificationId = await new Promise<string>((resolve, reject) => {
+        const verifier = auth().verifyPhoneNumber(normalizedPhone);
+        verifier.on('state_changed', (snapshot) => {
+          switch (snapshot.state) {
+            case auth.PhoneAuthState.CODE_SENT:
+              resolve(snapshot.verificationId || '');
+              break;
+            case auth.PhoneAuthState.ERROR:
+              reject(snapshot.error);
+              break;
+            case auth.PhoneAuthState.AUTO_VERIFY_TIMEOUT:
+              if (snapshot.verificationId) {
+                resolve(snapshot.verificationId);
+              }
+              break;
+            default:
+              break;
+          }
+        });
+      });
+      return verificationId;
+    } catch (error: any) {
+      throw this.handleAuthError(error);
+    }
+  }
+
+  // Confirm phone verification code and link to current user account
+  async confirmPhoneVerification(verificationId: string, code: string): Promise<void> {
+    try {
+      const user = auth().currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+
+      const credential = auth.PhoneAuthProvider.credential(verificationId, code);
+      await user.linkWithCredential(credential);
+
+      // Update phoneVerified flag in Firestore if we have a profile
+      try {
+        await firestoreService.updatePhoneVerification(user.uid, true);
+      } catch (e) {
+        // Non-fatal: log and continue
+        console.warn('Failed to update phoneVerified in Firestore:', e);
+      }
     } catch (error: any) {
       throw this.handleAuthError(error);
     }

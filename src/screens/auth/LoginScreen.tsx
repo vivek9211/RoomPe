@@ -13,13 +13,15 @@ import { colors, fonts, dimensions } from '../../constants';
 import { Button, Input, SocialButton } from '../../components/common';
 import { validateEmail, validatePassword } from '../../utils/validation';
 import { useAuth } from '../../contexts/AuthContext';
+import firestoreService from '../../services/firestore';
+import auth from '@react-native-firebase/auth';
 
 interface LoginScreenProps {
   navigation: any; // Replace with proper navigation type
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle, isEmailVerified, refreshUserProfile, user, userProfile } = useAuth() as any;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -45,12 +47,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     setIsLoading(true);
     
     try {
-      // Use Firebase authentication
       await signIn(email, password);
-      
+
+      const verified = await isEmailVerified(true);
+      if (!verified) {
+        navigation.navigate('EmailVerification');
+        return;
+      }
+
       console.log('Login successful');
-      
-      // Navigate to main app
       navigation.navigate('Dashboard');
     } catch (error: any) {
       Alert.alert('Login Failed', error.message);
@@ -63,16 +68,41 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     setIsGoogleLoading(true);
     
     try {
-      // Simulate Google authentication
-      await new Promise<void>(resolve => setTimeout(resolve, 2000));
+      await signInWithGoogle();
       
-      // TODO: Implement actual Google authentication
-      console.log('Google login attempt');
+      // Get current user directly from Firebase Auth to avoid stale context
+      const currentUser = auth().currentUser;
+      if (!currentUser?.uid) {
+        throw new Error('No authenticated user after Google sign-in');
+      }
       
-      // Navigate to main app
-      navigation.navigate('Dashboard');
-    } catch (error) {
-      Alert.alert('Google Login Failed', 'Unable to sign in with Google. Please try again.');
+      // Get the latest profile directly from Firestore
+      let profile = null;
+      try {
+        profile = await firestoreService.getUserProfile(currentUser.uid);
+        console.log('Profile fetched:', profile);
+      } catch (error) {
+        console.log('Error fetching profile:', error);
+      }
+
+      const roleValue = (profile && (profile as any).role) as string | undefined;
+      const hasValidRole = roleValue === 'tenant' || roleValue === 'owner';
+      const onboardingCompleted = profile && (profile as any).onboardingCompleted === true;
+      
+      console.log('Role value:', roleValue, 'Has valid role:', hasValidRole, 'Onboarding completed:', onboardingCompleted);
+
+      if (!profile || !hasValidRole) {
+        console.log('Navigating to RoleSelection - Profile:', !!profile, 'Role:', roleValue);
+        navigation.navigate('RoleSelection');
+      } else if (!onboardingCompleted) {
+        console.log('Skipping Onboarding - navigating to Dashboard');
+        navigation.navigate('Dashboard');
+      } else {
+        console.log('Navigating to Dashboard - Profile exists with role and onboarding completed');
+        navigation.navigate('Dashboard');
+      }
+    } catch (error: any) {
+      Alert.alert('Google Login Failed', error.message || 'Unable to sign in with Google. Please try again.');
     } finally {
       setIsGoogleLoading(false);
     }

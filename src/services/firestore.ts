@@ -35,7 +35,7 @@ class FirestoreService {
           email: data?.email || '',
           name: data?.name || '',
           phone: data?.phone || '',
-          role: data?.role || UserRole.TENANT,
+          role: data?.role as UserRole,
           status: data?.status || UserStatus.ACTIVE,
           createdAt: data?.createdAt || firestore.Timestamp.now(),
           updatedAt: data?.updatedAt || firestore.Timestamp.now(),
@@ -52,8 +52,12 @@ class FirestoreService {
         } as User;
       }
       return null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching user profile:', error);
+      if (error?.code === 'firestore/permission-denied' || error?.code === 'permission-denied') {
+        // Treat as no accessible profile; caller can proceed to onboarding
+        return null;
+      }
       throw new Error('Failed to fetch user profile');
     }
   }
@@ -103,7 +107,7 @@ class FirestoreService {
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
       
-      await this.usersCollection.doc(uid).update(updateData);
+      await this.usersCollection.doc(uid).set(updateData as any, { merge: true });
     } catch (error) {
       console.error('Error updating user profile:', error);
       throw new Error('Failed to update user profile');

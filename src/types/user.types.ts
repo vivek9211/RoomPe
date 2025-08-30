@@ -46,6 +46,7 @@ export interface CreateUserData {
   name: string;
   phone: string;
   role: UserRole;
+  onboardingCompleted?: boolean;
 }
 
 // Optional fields for user updates
@@ -59,6 +60,8 @@ export interface UpdateUserData {
   dateOfBirth?: Timestamp;
   emergencyContact?: EmergencyContact;
   preferences?: UserPreferences;
+  role?: UserRole;
+  onboardingCompleted?: boolean;
 }
 
 // Complete user model with all fields
@@ -69,6 +72,9 @@ export interface User extends BaseUser {
   lastLoginAt?: Timestamp;
   emailVerified: boolean;
   phoneVerified: boolean;
+  
+  // Onboarding status
+  onboardingCompleted: boolean;
   
   // Optional address information
   address?: Location;

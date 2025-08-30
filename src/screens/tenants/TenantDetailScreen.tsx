@@ -1,12 +1,62 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+} from 'react-native';
+import { colors, fonts, dimensions } from '../../constants';
 
-const TenantDetailScreen = () => {
+const TenantDetailScreen: React.FC = () => {
   return (
-    <View>
-      <Text>Tenant Detail Screen</Text>
-    </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Tenant Details</Text>
+        <Text style={styles.subtitle}>View tenant information</Text>
+        
+        <TouchableOpacity style={styles.editButton}>
+          <Text style={styles.editButtonText}>Edit Tenant</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: dimensions.spacing.xl,
+    paddingTop: dimensions.spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: fonts.xxxl,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.sm,
+  },
+  subtitle: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    marginBottom: dimensions.spacing.xl,
+  },
+  editButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+  },
+  editButtonText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '500',
+  },
+});
 
 export default TenantDetailScreen;

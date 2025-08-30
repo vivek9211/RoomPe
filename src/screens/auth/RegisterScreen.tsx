@@ -19,13 +19,15 @@ import {
   validatePhoneNumber
 } from '../../utils/validation';
 import { useAuth } from '../../contexts/AuthContext';
+import firestoreService from '../../services/firestore';
+import auth from '@react-native-firebase/auth';
 
 interface RegisterScreenProps {
   navigation: any; // Replace with proper navigation type
 }
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle } = useAuth();
   
   // Form fields
   const [fullName, setFullName] = useState('');
@@ -90,16 +92,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
         userType: isOwner ? 'Owner' : 'Tenant' 
       });
       
-      Alert.alert(
-        'Registration Successful!',
-        `Welcome ${fullName}! Your ${isOwner ? 'Owner' : 'Tenant'} account has been created successfully.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Dashboard')
-          }
-        ]
-      );
+      navigation.navigate('EmailVerification');
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message);
     } finally {
@@ -111,24 +104,54 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
     setIsGoogleLoading(true);
     
     try {
-      // Simulate Google authentication
-      await new Promise<void>(resolve => setTimeout(resolve, 2000));
+      // Sign in with Google
+      await signInWithGoogle();
       
-      // TODO: Implement actual Google registration
-      console.log('Google registration attempt');
+      // Get current user directly from Firebase Auth
+      const currentUser = auth().currentUser;
+      if (!currentUser?.uid) {
+        throw new Error('No authenticated user after Google sign-in');
+      }
       
-      Alert.alert(
-        'Registration Successful!',
-        'Your account has been created successfully with Google.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Dashboard')
-          }
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Google Registration Failed', 'Unable to sign up with Google. Please try again.');
+      // Check if user already has a profile
+      let profile = null;
+      try {
+        profile = await firestoreService.getUserProfile(currentUser.uid);
+        console.log('Profile fetched:', profile);
+      } catch (error) {
+        console.log('Error fetching profile:', error);
+      }
+
+      // Check if user already exists
+      if (profile && profile.role) {
+        // User already exists with a role, check onboarding status
+        if (profile.onboardingCompleted) {
+          // User has completed onboarding, redirect to login
+          Alert.alert(
+            'Account Already Exists',
+            'An account with this Google email already exists. Please sign in instead.',
+            [
+              {
+                text: 'Go to Login',
+                onPress: () => {
+                  // Sign out the Google user since they should use existing account
+                  auth().signOut();
+                  navigation.navigate('LoginScreen');
+                }
+              }
+            ]
+          );
+        } else {
+          // User exists but hasn't completed onboarding, go to onboarding
+          navigation.navigate('Onboarding');
+        }
+      } else {
+        // New user or incomplete profile, go to RoleSelection
+        navigation.navigate('RoleSelection');
+      }
+      
+    } catch (error: any) {
+      Alert.alert('Google Registration Failed', error.message || 'Unable to sign up with Google. Please try again.');
     } finally {
       setIsGoogleLoading(false);
     }

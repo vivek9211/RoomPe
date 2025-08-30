@@ -8,15 +8,15 @@ import {
 } from 'react-native';
 import { colors, fonts, dimensions } from '../../constants';
 
-const MaintenanceListScreen: React.FC = () => {
+const OnboardingScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Maintenance</Text>
-        <Text style={styles.subtitle}>Report and track issues</Text>
+        <Text style={styles.title}>Welcome to RoomPe!</Text>
+        <Text style={styles.subtitle}>Complete your onboarding to get started</Text>
         
-        <TouchableOpacity style={styles.addButton}>
-          <Text style={styles.addButtonText}>+ Report Issue</Text>
+        <TouchableOpacity style={styles.completeButton}>
+          <Text style={styles.completeButtonText}>Complete Onboarding</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -46,17 +46,17 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: dimensions.spacing.xl,
   },
-  addButton: {
+  completeButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
     borderRadius: dimensions.borderRadius.md,
   },
-  addButtonText: {
+  completeButtonText: {
     color: colors.white,
     fontSize: fonts.md,
     fontWeight: '500',
   },
 });
 
-export default MaintenanceListScreen;
+export default OnboardingScreen; 
