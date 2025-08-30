@@ -5,10 +5,39 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { colors, fonts, dimensions } from '../../constants';
+import { useAuth } from '../../contexts/AuthContext';
 
 const SettingsScreen: React.FC = () => {
+  const { signOut } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -17,6 +46,10 @@ const SettingsScreen: React.FC = () => {
         
         <TouchableOpacity style={styles.profileButton}>
           <Text style={styles.profileButtonText}>Edit Profile</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -51,8 +84,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
     borderRadius: dimensions.borderRadius.md,
+    marginBottom: dimensions.spacing.md,
   },
   profileButtonText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '500',
+  },
+  logoutButton: {
+    backgroundColor: colors.error,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+  },
+  logoutButtonText: {
     color: colors.white,
     fontSize: fonts.md,
     fontWeight: '500',

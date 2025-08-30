@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProperty } from '../../contexts/PropertyContext';
 import { Property } from '../../types/property.types';
 
 interface OwnerDashboardScreenProps {
@@ -21,15 +24,35 @@ interface OwnerDashboardScreenProps {
 
 const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation, route }) => {
   const { userProfile } = useAuth();
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const { selectedProperty, setSelectedProperty } = useProperty();
   const [properties, setProperties] = useState<Property[]>([]);
+  
+  // Animation values for scroll effects
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  
+
 
   useEffect(() => {
-    if (route?.params?.selectedProperty) {
-      setSelectedProperty(route.params.selectedProperty);
-    }
     loadProperties();
-  }, [route?.params?.selectedProperty]);
+    
+    // Start entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+
 
   const loadProperties = async () => {
     try {
@@ -191,50 +214,162 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
         </View>
 
         {/* Quick Actions Section */}
-        <View style={styles.quickActionsSection}>
+        <Animated.View 
+          style={[
+            styles.quickActionsSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }
+          ]}
+        >
           <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction('addTenant')}
-            >
-              <Text style={styles.actionIcon}>👥</Text>
-              <Text style={styles.actionLabel}>Add Tenant</Text>
-            </TouchableOpacity>
+          
+          {/* Horizontal ScrollView for Quick Actions */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickActionsScrollContainer}
+            snapToInterval={80 + dimensions.spacing.md}
+            decelerationRate="fast"
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: scrollY } } }],
+              { useNativeDriver: false }
+            )}
+            scrollEventThrottle={16}
+            bounces={true}
+            alwaysBounceHorizontal={false}
+          >
+                         <Animated.View
+               style={{
+                 transform: [{
+                   scale: scrollY.interpolate({
+                     inputRange: [0, 80],
+                     outputRange: [1, 1.05],
+                     extrapolate: 'clamp',
+                   }),
+                 }],
+               }}
+             >
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction('addTenant')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionIcon}>👥</Text>
+                <Text style={styles.actionLabel}>Add Tenant</Text>
+              </TouchableOpacity>
+            </Animated.View>
             
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction('receivePayment')}
-            >
-              <Text style={styles.actionIcon}>💱</Text>
-              <Text style={styles.actionLabel}>Receive Payment</Text>
-            </TouchableOpacity>
+                         <Animated.View
+               style={{
+                 transform: [{
+                   scale: scrollY.interpolate({
+                     inputRange: [80, 160],
+                     outputRange: [1, 1.05],
+                     extrapolate: 'clamp',
+                   }),
+                 }],
+               }}
+             >
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction('receivePayment')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionIcon}>💱</Text>
+                <Text style={styles.actionLabel}>Receive Payment</Text>
+              </TouchableOpacity>
+            </Animated.View>
             
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction('addDues')}
-            >
-              <Text style={styles.actionIcon}>📋</Text>
-              <Text style={styles.actionLabel}>Add Dues</Text>
-            </TouchableOpacity>
+                         <Animated.View
+               style={{
+                 transform: [{
+                   scale: scrollY.interpolate({
+                     inputRange: [160, 240],
+                     outputRange: [1, 1.05],
+                     extrapolate: 'clamp',
+                   }),
+                 }],
+               }}
+             >
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction('addDues')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionIcon}>📋</Text>
+                <Text style={styles.actionLabel}>Add Dues</Text>
+              </TouchableOpacity>
+            </Animated.View>
             
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction('addExpense')}
-            >
-              <Text style={styles.actionIcon}>📄</Text>
-              <Text style={styles.actionLabel}>Add Expense</Text>
-            </TouchableOpacity>
+                         <Animated.View
+               style={{
+                 transform: [{
+                   scale: scrollY.interpolate({
+                     inputRange: [240, 320],
+                     outputRange: [1, 1.05],
+                     extrapolate: 'clamp',
+                   }),
+                 }],
+               }}
+             >
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction('addExpense')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionIcon}>📄</Text>
+                <Text style={styles.actionLabel}>Add Expense</Text>
+              </TouchableOpacity>
+            </Animated.View>
             
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => handleQuickAction('sendAnnouncement')}
-            >
-              <Text style={styles.actionIcon}>📢</Text>
-              <Text style={styles.actionLabel}>Send Announcement</Text>
-            </TouchableOpacity>
+                         <Animated.View
+               style={{
+                 transform: [{
+                   scale: scrollY.interpolate({
+                     inputRange: [320, 400],
+                     outputRange: [1, 1.05],
+                     extrapolate: 'clamp',
+                   }),
+                 }],
+               }}
+             >
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction('sendAnnouncement')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionIcon}>📢</Text>
+                <Text style={styles.actionLabel}>Send Announcement</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </ScrollView>
+          
+          {/* Scroll Indicator */}
+          <View style={styles.scrollIndicator}>
+            <View style={styles.scrollDots}>
+              {[0, 1, 2, 3, 4].map((index) => (
+                <Animated.View
+                  key={index}
+                  style={[
+                    styles.scrollDot,
+                    {
+                                             backgroundColor: scrollY.interpolate({
+                         inputRange: [
+                           index * 80,
+                           (index + 1) * 80,
+                         ],
+                         outputRange: [colors.textMuted, colors.primary],
+                         extrapolate: 'clamp',
+                       }),
+                    },
+                  ]}
+                />
+              ))}
+            </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Reports Section */}
         <View style={styles.reportsSection}>
@@ -464,18 +599,18 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: dimensions.spacing.md,
   },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  quickActionsScrollContainer: {
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.sm,
   },
   quickActionButton: {
-    width: '18%',
+    width: 80,
+    minWidth: 80,
     backgroundColor: colors.white,
     padding: dimensions.spacing.md,
     borderRadius: dimensions.borderRadius.md,
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    marginRight: dimensions.spacing.md,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -545,6 +680,22 @@ const styles = StyleSheet.create({
     fontSize: fonts.sm,
     color: colors.white,
     fontWeight: '500',
+  },
+  scrollIndicator: {
+    alignItems: 'center',
+    marginTop: dimensions.spacing.md,
+  },
+  scrollDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
+    backgroundColor: colors.textMuted,
   },
 });
 

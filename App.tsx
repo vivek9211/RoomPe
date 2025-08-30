@@ -12,18 +12,21 @@ import {
 } from 'react-native-safe-area-context';
 import { colors } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { PropertyProvider } from './src/contexts/PropertyContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
 function App() {
   return (
     <AuthProvider>
-      <SafeAreaProvider>
-        <StatusBar 
-          barStyle="dark-content" 
-          backgroundColor={colors.background}
-        />
-        <AppNavigator />
-      </SafeAreaProvider>
+      <PropertyProvider>
+        <SafeAreaProvider>
+          <StatusBar 
+            barStyle="dark-content" 
+            backgroundColor={colors.background}
+          />
+          <AppNavigator />
+        </SafeAreaProvider>
+      </PropertyProvider>
     </AuthProvider>
   );
 }

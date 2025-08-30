@@ -17,13 +17,13 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
   const handleLogin = () => {
     console.log('Login button pressed!');
     // Navigate to login screen
-    navigation.navigate('LoginScreen');
+    navigation.navigate('Login');
   };
 
   const handleRegister = () => {
     console.log('Register button pressed!');
     // Navigate to register screen
-    navigation.navigate('RegisterScreen');
+    navigation.navigate('Register');
   };
 
   return (

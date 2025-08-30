@@ -13,6 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProperty } from '../../contexts/PropertyContext';
 import { Property } from '../../types/property.types';
 
 interface PropertySelectionScreenProps {
@@ -21,6 +22,7 @@ interface PropertySelectionScreenProps {
 
 const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navigation }) => {
   const { userProfile } = useAuth();
+  const { setSelectedProperty } = useProperty();
   const [properties, setProperties] = useState<Property[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -92,8 +94,9 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
   };
 
   const handlePropertySelect = (property: Property) => {
-    // Navigate to property detail or dashboard with selected property
-    navigation.navigate('OwnerDashboard', { selectedProperty: property });
+    // Set the selected property in context and go back to the previous screen
+    setSelectedProperty(property);
+    navigation.goBack();
   };
 
   const handleAddProperty = () => {
