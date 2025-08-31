@@ -378,19 +378,17 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
         translucent={false}
       />
       
-      {/* Simplified Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tenant Applications</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={loadTenantApplications}>
-          <Text style={styles.refreshIcon}>↻</Text>
-        </TouchableOpacity>
-      </View>
+             {/* Header */}
+       <View style={styles.header}>
+         <TouchableOpacity
+           style={styles.backButton}
+           onPress={() => navigation.goBack()}
+         >
+           <Text style={styles.backIcon}>‹</Text>
+         </TouchableOpacity>
+         <Text style={styles.headerTitle}>Tenant Applications</Text>
+         <View style={styles.headerSpacer} />
+       </View>
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
@@ -457,16 +455,11 @@ const styles = StyleSheet.create({
     height: 56,
   },
   backButton: {
-    marginRight: appDimensions.spacing.md,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: appDimensions.spacing.sm,
+    marginRight: appDimensions.spacing.sm,
   },
   backIcon: {
-    fontSize: 20,
+    fontSize: 24,
     color: colors.white,
     fontWeight: 'bold',
   },
@@ -477,18 +470,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  refreshButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  refreshIcon: {
-    fontSize: 16,
-    color: colors.white,
-    fontWeight: '600',
+  headerSpacer: {
+    width: 40,
   },
   filterContainer: {
     flexDirection: 'row',
