@@ -40,14 +40,14 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
   const [filteredApplications, setFilteredApplications] = useState<ApplicationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterType>('pending');
 
   useEffect(() => {
     if (userProfile?.uid) {
       loadTenantApplications();
       
-      // Set up real-time listener for tenant applications
-      const unsubscribe = firestoreService.onTenantApplicationsChange(
+      // Set up real-time listener for all tenant applications (not just pending)
+      const unsubscribe = firestoreService.onAllTenantApplicationsChange(
         userProfile.uid,
         async (firebaseApplications) => {
           const applicationsWithDetails = await Promise.all(
@@ -93,7 +93,8 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
   const loadTenantApplications = async () => {
     try {
       setLoading(true);
-      const applicationsData = await firestoreService.getTenantApplicationsByOwner(userProfile!.uid);
+      // Use the new method that gets all applications, not just pending ones
+      const applicationsData = await firestoreService.getAllTenantApplicationsByOwner(userProfile!.uid);
       
       const applicationsWithDetails = await Promise.all(
         applicationsData.map(async (app: any) => {
@@ -148,6 +149,65 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
     } finally {
       setProcessing(null);
     }
+  };
+
+  const handleDeleteApplication = async (applicationId: string) => {
+    Alert.alert(
+      'Delete Application',
+      'Are you sure you want to delete this application? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setProcessing(applicationId);
+              await firestoreService.deleteTenantApplication(applicationId);
+              Alert.alert('Success', 'Application deleted successfully');
+            } catch (error) {
+              console.error('Error deleting application:', error);
+              Alert.alert('Error', 'Failed to delete application. Please try again.');
+            } finally {
+              setProcessing(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteAllApplications = async () => {
+    const count = applications.length;
+    if (count === 0) {
+      Alert.alert('No Applications', 'There are no applications to delete.');
+      return;
+    }
+
+    Alert.alert(
+      'Delete All Applications',
+      `Are you sure you want to delete all ${count} applications? This action cannot be undone and will clear the entire collection.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await firestoreService.deleteAllTenantApplicationsForOwner(userProfile!.uid);
+              Alert.alert('Success', `All ${count} applications have been deleted successfully`);
+              setApplications([]);
+            } catch (error) {
+              console.error('Error deleting all applications:', error);
+              Alert.alert('Error', 'Failed to delete all applications. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const getStatusColor = (status: string) => {
@@ -229,8 +289,19 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
             </Text>
           </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+        <View style={styles.headerActions}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+            <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+          </View>
+          {(item.status === 'approved' || item.status === 'rejected') && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDeleteApplication(item.id)}
+              disabled={processing === item.id}
+            >
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -328,6 +399,19 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
         {renderFilterTab('approved', 'Approved', filterCounts.approved)}
         {renderFilterTab('rejected', 'Rejected', filterCounts.rejected)}
       </View>
+
+      {/* Clear All Button - only show for Approved and Rejected sections */}
+      {applications.length > 0 && (activeFilter === 'approved' || activeFilter === 'rejected') && (
+        <View style={styles.clearAllContainer}>
+          <TouchableOpacity
+            style={styles.clearAllButton}
+            onPress={handleDeleteAllApplications}
+            disabled={loading}
+          >
+            <Text style={styles.clearAllButtonText}>🗑️ Clear All {activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)} Applications</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -523,6 +607,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: appDimensions.spacing.sm,
+  },
+  deleteButton: {
+    paddingHorizontal: appDimensions.spacing.md,
+    paddingVertical: appDimensions.spacing.sm,
+    borderRadius: appDimensions.borderRadius.sm,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  deleteButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.white,
+    textAlign: 'center',
+  },
   cardContent: {
     padding: appDimensions.spacing.md,
   },
@@ -605,6 +709,24 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  clearAllContainer: {
+    paddingHorizontal: appDimensions.spacing.md,
+    paddingVertical: appDimensions.spacing.sm,
+    backgroundColor: colors.lightGray,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray,
+  },
+  clearAllButton: {
+    backgroundColor: colors.error,
+    borderRadius: appDimensions.borderRadius.md,
+    paddingVertical: appDimensions.spacing.sm,
+    alignItems: 'center',
+  },
+  clearAllButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
