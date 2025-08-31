@@ -9,6 +9,7 @@ export const COLLECTIONS = {
   PAYMENTS: 'payments',
   MAINTENANCE_REQUESTS: 'maintenance_requests',
   NOTIFICATIONS: 'notifications',
+  ROOM_MAPPINGS: 'room_mappings',
 } as const;
 
 // Firestore service class for all Firestore operations
@@ -21,6 +22,11 @@ class FirestoreService {
   // Properties collection
   private get propertiesCollection() {
     return firestore().collection(COLLECTIONS.PROPERTIES);
+  }
+
+  // Room Mappings collection
+  private get roomMappingsCollection() {
+    return firestore().collection(COLLECTIONS.ROOM_MAPPINGS);
   }
 
   // ==================== USER OPERATIONS ====================
@@ -517,6 +523,102 @@ class FirestoreService {
       },
       (error) => {
         console.error('Error listening to user profile changes:', error);
+        callback(null);
+      }
+    );
+  }
+
+  // ==================== ROOM MAPPING OPERATIONS ====================
+
+  /**
+   * Create or update room mapping for a property
+   * @param propertyId - Property ID
+   * @param roomMappingData - Room mapping data
+   */
+  async createOrUpdateRoomMapping(
+    propertyId: string, 
+    roomMappingData: {
+      totalFloors: number;
+      floorConfigs: any[];
+    }
+  ): Promise<void> {
+    try {
+      const roomMappingDoc = {
+        propertyId,
+        totalFloors: roomMappingData.totalFloors,
+        floorConfigs: roomMappingData.floorConfigs,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Use propertyId as the document ID for easy querying
+      await this.roomMappingsCollection.doc(propertyId).set(roomMappingDoc);
+      
+      console.log('Room mapping created/updated successfully for property:', propertyId);
+    } catch (error) {
+      console.error('Error creating/updating room mapping:', error);
+      throw new Error('Failed to create/update room mapping');
+    }
+  }
+
+  /**
+   * Get room mapping for a property
+   * @param propertyId - Property ID
+   * @returns Room mapping data or null if not found
+   */
+  async getRoomMapping(propertyId: string): Promise<any | null> {
+    try {
+      const doc = await this.roomMappingsCollection.doc(propertyId).get();
+      if (doc.exists) {
+        return {
+          id: doc.id,
+          ...doc.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching room mapping:', error);
+      throw new Error('Failed to fetch room mapping');
+    }
+  }
+
+  /**
+   * Delete room mapping for a property
+   * @param propertyId - Property ID
+   */
+  async deleteRoomMapping(propertyId: string): Promise<void> {
+    try {
+      await this.roomMappingsCollection.doc(propertyId).delete();
+      console.log('Room mapping deleted successfully for property:', propertyId);
+    } catch (error) {
+      console.error('Error deleting room mapping:', error);
+      throw new Error('Failed to delete room mapping');
+    }
+  }
+
+  /**
+   * Listen to room mapping changes in real-time
+   * @param propertyId - Property ID
+   * @param callback - Callback function to handle changes
+   * @returns Unsubscribe function
+   */
+  onRoomMappingChange(
+    propertyId: string, 
+    callback: (roomMapping: any | null) => void
+  ): () => void {
+    return this.roomMappingsCollection.doc(propertyId).onSnapshot(
+      (doc) => {
+        if (doc.exists) {
+          callback({
+            id: doc.id,
+            ...doc.data()
+          });
+        } else {
+          callback(null);
+        }
+      },
+      (error) => {
+        console.error('Error listening to room mapping changes:', error);
         callback(null);
       }
     );

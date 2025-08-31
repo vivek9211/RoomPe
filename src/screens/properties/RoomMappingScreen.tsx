@@ -10,7 +10,7 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { Property } from '../../types/property.types';
 import { 
@@ -20,6 +20,7 @@ import {
   FloorRoomConfig,
   CreateFloorData 
 } from '../../types/room.types';
+import { firestoreService } from '../../services/firestore';
 
 interface RoomMappingScreenProps {
   navigation: any;
@@ -40,9 +41,35 @@ const RoomMappingScreen: React.FC<RoomMappingScreenProps> = ({ navigation, route
     }
   }, [property]);
 
+  // Check for existing room mapping when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (property) {
+        loadExistingRoomMapping();
+      }
+    }, [property])
+  );
+
   const loadExistingRoomMapping = async () => {
-    // TODO: Load existing room mapping from Firestore
-    // For now, we'll start fresh
+    try {
+      setLoading(true);
+      
+      // Load existing room mapping from Firebase
+      const existingMapping = await firestoreService.getRoomMapping(property.id);
+      
+      if (existingMapping && existingMapping.totalFloors) {
+        // Update state with existing data
+        const floors = existingMapping.totalFloors;
+        setTotalFloors(floors);
+        setFloorInputValue(floors.toString());
+        console.log('Loaded existing room mapping:', existingMapping);
+      }
+    } catch (error) {
+      console.error('Error loading existing room mapping:', error);
+      // Don't show error to user, just start fresh
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleTotalFloorsChange = (value: string) => {
@@ -111,18 +138,31 @@ const RoomMappingScreen: React.FC<RoomMappingScreenProps> = ({ navigation, route
     return configs;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (totalFloors < 1) {
       Alert.alert('Error', 'Please enter a valid number of floors');
       return;
     }
 
-    const floorConfigs = generateFloorConfigs();
-    navigation.navigate('FloorConfiguration', {
-      property,
-      totalFloors,
-      floorConfigs,
-    });
+    try {
+      setLoading(true);
+      
+      // Generate floor configurations (with default 0 values)
+      const floorConfigs = generateFloorConfigs();
+      
+      // Navigate to next screen with configurations
+      // Don't save to Firebase yet - wait for user to configure rooms
+      navigation.navigate('FloorConfiguration', {
+        property,
+        totalFloors,
+        floorConfigs,
+      });
+    } catch (error) {
+      console.error('Error navigating to floor configuration:', error);
+      Alert.alert('Error', 'Failed to proceed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!property) {
@@ -182,8 +222,14 @@ const RoomMappingScreen: React.FC<RoomMappingScreenProps> = ({ navigation, route
                 keyboardType="numeric"
                 maxLength={2}
               />
-              <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-                <Text style={styles.nextButtonText}>›</Text>
+              <TouchableOpacity 
+                style={[styles.nextButton, loading && styles.nextButtonDisabled]} 
+                onPress={handleNext}
+                disabled={loading}
+              >
+                <Text style={styles.nextButtonText}>
+                  {loading ? '...' : '›'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -294,6 +340,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  nextButtonDisabled: {
+    backgroundColor: colors.lightGray,
+    opacity: 0.6,
   },
   nextButtonText: {
     fontSize: fonts.xl,

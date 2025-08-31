@@ -8,6 +8,7 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
@@ -17,6 +18,7 @@ import {
   UnitType, 
   FloorRoomConfig 
 } from '../../types/room.types';
+import { firestoreService } from '../../services/firestore';
 
 interface FloorConfigurationScreenProps {
   navigation: any;
@@ -34,6 +36,33 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
     }
   }, [floorConfigs]);
 
+  // Load existing room mapping when component mounts
+  useEffect(() => {
+    if (property) {
+      loadExistingRoomMapping();
+    }
+  }, [property]);
+
+  const loadExistingRoomMapping = async () => {
+    try {
+      setLoading(true);
+      
+      // Load existing room mapping from Firebase
+      const existingMapping = await firestoreService.getRoomMapping(property.id);
+      
+      if (existingMapping && existingMapping.floorConfigs) {
+        // Update state with existing data
+        setConfigs(existingMapping.floorConfigs);
+        console.log('Loaded existing room mapping:', existingMapping);
+      }
+    } catch (error) {
+      console.error('Error loading existing room mapping:', error);
+      // Don't show error to user, just use the passed configs
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const updateRoomConfig = (floorIndex: number, sharingType: RoomSharingType, count: number) => {
     const newConfigs = [...configs];
     newConfigs[floorIndex].roomConfigs[sharingType] = Math.max(0, count);
@@ -50,8 +79,11 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
     const floor = configs[floorIndex];
     if (!floor) return 0;
     
-    const roomCount = Object.values(floor.roomConfigs).reduce((sum, count) => sum + count, 0);
-    const unitCount = Object.values(floor.unitConfigs).reduce((sum, count) => sum + count, 0);
+    // Calculate total room count from roomConfigs
+    const roomCount = Object.values(floor.roomConfigs || {}).reduce((sum, count) => sum + (count || 0), 0);
+    
+    // Calculate total unit count from unitConfigs
+    const unitCount = Object.values(floor.unitConfigs || {}).reduce((sum, count) => sum + (count || 0), 0);
     
     return roomCount + unitCount;
   };
@@ -76,7 +108,12 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
   const handleSave = async () => {
     setLoading(true);
     try {
-      // TODO: Save room mapping to Firestore
+      // Save updated room mapping to Firestore
+      await firestoreService.createOrUpdateRoomMapping(property.id, {
+        totalFloors,
+        floorConfigs: configs,
+      });
+      
       Alert.alert('Success', 'Room mapping saved successfully!', [
         {
           text: 'OK',
@@ -91,11 +128,39 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
     }
   };
 
-  if (!property || !configs.length) {
+  if (!property) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.title}>Configuration Not Found</Text>
+          <Text style={styles.title}>Property Not Found</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (loading && !configs.length) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Loading Room Configuration...</Text>
+          <Text style={styles.subtitle}>Please wait while we load your existing room mapping.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!configs.length) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <Text style={styles.title}>No Configuration Found</Text>
+          <Text style={styles.subtitle}>Please go back and set up your room configuration.</Text>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -127,7 +192,18 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+             <ScrollView 
+         style={styles.content} 
+         showsVerticalScrollIndicator={false}
+         refreshControl={
+           <RefreshControl
+             refreshing={loading}
+             onRefresh={loadExistingRoomMapping}
+             colors={[colors.primary]}
+             tintColor={colors.primary}
+           />
+         }
+       >
         {/* Property Overview */}
         <View style={styles.overviewSection}>
           <View style={styles.overviewHeader}>
@@ -148,16 +224,20 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
             <Text style={styles.summaryNumber}>{totalFloors}</Text>
             <Text style={styles.summaryLabel}>Total Floors</Text>
           </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryIcon}>✅</Text>
-            <Text style={styles.summaryNumber}>0</Text>
-            <Text style={styles.summaryLabel}>Filled Floors</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryIcon}>🔄</Text>
-            <Text style={styles.summaryNumber}>{totalFloors}</Text>
-            <Text style={styles.summaryLabel}>Vacant Floors</Text>
-          </View>
+                     <View style={styles.summaryCard}>
+             <Text style={styles.summaryIcon}>✅</Text>
+             <Text style={styles.summaryNumber}>
+               {configs.filter((_, index) => getTotalUnitsForFloor(index) > 0).length}
+             </Text>
+             <Text style={styles.summaryLabel}>Filled Floors</Text>
+           </View>
+                     <View style={styles.summaryCard}>
+             <Text style={styles.summaryIcon}>🔄</Text>
+             <Text style={styles.summaryNumber}>
+               {configs.filter((_, index) => getTotalUnitsForFloor(index) === 0).length}
+             </Text>
+             <Text style={styles.summaryLabel}>Vacant Floors</Text>
+           </View>
         </View>
 
         {/* Floor List */}
@@ -166,14 +246,23 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
             <View key={floor.floorId} style={styles.floorCard}>
               <View style={styles.floorHeader}>
                 <View style={styles.floorInfo}>
-                  <View style={styles.radioButton}>
-                    <View style={styles.radioInner} />
-                  </View>
+                                     <View style={[
+                     styles.radioButton,
+                     getTotalUnitsForFloor(index) > 0 && styles.radioButtonActive
+                   ]}>
+                     <View style={[
+                       styles.radioInner,
+                       getTotalUnitsForFloor(index) > 0 && styles.radioInnerActive
+                     ]} />
+                   </View>
                   <Text style={styles.floorName}>{floor.floorName}</Text>
                 </View>
-                <Text style={styles.floorStatus}>
-                  {getTotalUnitsForFloor(index) > 0 ? `${getTotalUnitsForFloor(index)} units` : 'No units added'}
-                </Text>
+                                 <Text style={[
+                   styles.floorStatus,
+                   getTotalUnitsForFloor(index) > 0 && styles.floorStatusActive
+                 ]}>
+                   {getTotalUnitsForFloor(index) > 0 ? `${getTotalUnitsForFloor(index)} units` : 'No units added'}
+                 </Text>
               </View>
 
               <View style={styles.floorContent}>
@@ -358,6 +447,12 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: colors.transparent,
   },
+  radioButtonActive: {
+    borderColor: colors.primary,
+  },
+  radioInnerActive: {
+    backgroundColor: colors.primary,
+  },
   floorName: {
     fontSize: fonts.lg,
     fontWeight: '600',
@@ -366,6 +461,10 @@ const styles = StyleSheet.create({
   floorStatus: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
+  },
+  floorStatusActive: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   floorContent: {
     flexDirection: 'row',
@@ -431,6 +530,31 @@ const styles = StyleSheet.create({
   saveButtonDisabled: {
     backgroundColor: colors.textMuted,
     opacity: 0.7,
+  },
+  title: {
+    fontSize: fonts.xl,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.lg,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    marginBottom: dimensions.spacing.lg,
+    textAlign: 'center',
+  },
+  backButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+    alignItems: 'center',
+  },
+  backButtonText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '500',
   },
 });
 
