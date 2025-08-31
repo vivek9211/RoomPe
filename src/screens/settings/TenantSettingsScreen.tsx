@@ -99,7 +99,7 @@ const TenantSettingsScreen: React.FC<TenantSettingsScreenProps> = ({ navigation 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
           {renderSettingItem('👤', 'Edit Profile', 'Update your personal information', handleNavigateToProfile)}
-          {renderSettingItem('🏠', 'Assign Property', 'Find and apply for properties', handleNavigateToAssignProperty)}
+          {renderSettingItem('🏠', 'Find Properties', 'Browse and apply to available properties', handleNavigateToAssignProperty)}
         </View>
 
         {/* Preferences Section */}

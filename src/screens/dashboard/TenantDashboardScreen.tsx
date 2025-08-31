@@ -63,7 +63,7 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
   };
 
   const handleFindProperties = () => {
-    navigation.navigate('PropertyApplication');
+    navigation.navigate('AssignProperty');
   };
 
   const handleNotifications = () => {

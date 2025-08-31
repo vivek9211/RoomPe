@@ -10,42 +10,37 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
+  Modal,
 } from 'react-native';
 import { colors, fonts, dimensions } from '../../constants';
 import { Button, Input } from '../../components/common';
 import firestoreService from '../../services/firestore';
-import { PropertyType } from '../../types/property.types';
+import { PropertyType, Property } from '../../types/property.types';
+import { useAuth } from '../../contexts/AuthContext';
+import firestore from '@react-native-firebase/firestore';
 
 interface AssignPropertyScreenProps {
   navigation: any;
 }
 
-interface Property {
-  id: string;
-  name: string;
-  type: string;
-  location: {
-    address: string;
-    city: string;
-    postalCode: string;
-  };
-  pricing: {
-    baseRent: number;
-    deposit: number;
-  };
-  availableRooms: number;
-  totalRooms: number;
-  amenities?: any;
-  description?: string;
-}
+
 
 const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation }) => {
+  const { userProfile } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [filteredProperties, setFilteredProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  
+  // Application states
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [message, setMessage] = useState('');
+  const [requestedRent, setRequestedRent] = useState('');
+  const [applying, setApplying] = useState(false);
   
   // Filter states
+  const [propertyNameFilter, setPropertyNameFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [postalCodeFilter, setPostalCodeFilter] = useState('');
   const [minRentFilter, setMinRentFilter] = useState('');
@@ -80,7 +75,7 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
 
   useEffect(() => {
     applyFilters();
-  }, [properties, cityFilter, postalCodeFilter, minRentFilter, maxRentFilter, propertyTypeFilter, amenitiesFilter]);
+  }, [properties, propertyNameFilter, cityFilter, postalCodeFilter, minRentFilter, maxRentFilter, propertyTypeFilter, amenitiesFilter]);
 
   const loadProperties = async () => {
     setLoading(true);
@@ -106,6 +101,13 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
 
   const applyFilters = () => {
     let filtered = [...properties];
+
+    // Apply property name filter
+    if (propertyNameFilter) {
+      filtered = filtered.filter(property => 
+        property.name.toLowerCase().includes(propertyNameFilter.toLowerCase())
+      );
+    }
 
     // Apply city filter
     if (cityFilter) {
@@ -156,6 +158,49 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
     setFilteredProperties(filtered);
   };
 
+  const submitApplication = async () => {
+    if (!selectedProperty || !userProfile?.uid) {
+      Alert.alert('Error', 'Please select a property');
+      return;
+    }
+
+    try {
+      setApplying(true);
+
+      const applicationData = {
+        tenantId: userProfile.uid,
+        propertyId: selectedProperty.id,
+        ownerId: selectedProperty.ownerId,
+        message: message.trim() || undefined,
+        requestedRent: requestedRent ? parseFloat(requestedRent) : undefined,
+        requestedMoveInDate: firestore.Timestamp.now(), // Default to current date
+      };
+
+      await firestoreService.createTenantApplication(applicationData);
+
+      Alert.alert(
+        'Application Submitted',
+        'Your application has been submitted successfully. The property owner will review it and get back to you.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setSelectedProperty(null);
+              setMessage('');
+              setRequestedRent('');
+              setShowApplicationModal(false);
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error submitting application:', error);
+      Alert.alert('Error', 'Failed to submit application. Please try again.');
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const handlePropertyTypeToggle = (type: string) => {
     setPropertyTypeFilter(prev => 
       prev.includes(type) 
@@ -174,33 +219,23 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
 
   const handleApplyFilters = () => {
     loadProperties();
-    setShowFilters(false);
+    setShowFilterModal(false);
   };
 
   const handleClearFilters = () => {
+    setPropertyNameFilter('');
     setCityFilter('');
     setPostalCodeFilter('');
     setMinRentFilter('');
     setMaxRentFilter('');
     setPropertyTypeFilter([]);
     setAmenitiesFilter([]);
+    setShowFilterModal(false);
   };
 
   const handlePropertyPress = (property: Property) => {
-    Alert.alert(
-      'Apply for Property',
-      `Would you like to apply for ${property.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Apply', 
-          onPress: () => {
-            // Navigate to property application screen
-            navigation.navigate('PropertyApplication', { propertyId: property.id });
-          }
-        }
-      ]
-    );
+    setSelectedProperty(property);
+    setShowApplicationModal(true);
   };
 
   const renderPropertyItem = ({ item }: { item: Property }) => (
@@ -252,6 +287,16 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
 
   const renderFilterSection = () => (
     <View style={styles.filterSection}>
+      <View style={styles.filterRow}>
+        <Input
+          label="Property Name"
+          placeholder="Enter property name"
+          value={propertyNameFilter}
+          onChangeText={setPropertyNameFilter}
+          style={styles.filterInput}
+        />
+      </View>
+      
       <View style={styles.filterRow}>
         <Input
           label="City"
@@ -335,20 +380,26 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
         </View>
       </View>
 
-      <View style={styles.filterActions}>
-        <Button
-          title="Clear Filters"
-          onPress={handleClearFilters}
-          variant="secondary"
-          style={styles.filterButton}
-        />
-        <Button
-          title="Apply Filters"
-          onPress={handleApplyFilters}
-          variant="primary"
-          style={styles.filterButton}
-        />
-      </View>
+             <View style={styles.filterActions}>
+         <TouchableOpacity
+           style={styles.cancelFilterButton}
+           onPress={() => setShowFilterModal(false)}
+         >
+           <Text style={styles.cancelFilterButtonText}>Cancel</Text>
+         </TouchableOpacity>
+         <TouchableOpacity
+           style={styles.clearFilterButton}
+           onPress={handleClearFilters}
+         >
+           <Text style={styles.clearFilterButtonText}>Clear</Text>
+         </TouchableOpacity>
+         <TouchableOpacity
+           style={styles.applyFilterButton}
+           onPress={handleApplyFilters}
+         >
+           <Text style={styles.applyFilterButtonText}>Apply</Text>
+         </TouchableOpacity>
+       </View>
     </View>
   );
 
@@ -359,20 +410,20 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Assign Property</Text>
-        <TouchableOpacity onPress={() => setShowFilters(!showFilters)} style={styles.filterButton}>
+        <Text style={styles.headerTitle}>Find Properties</Text>
+        <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterButton}>
           <Text style={styles.filterButtonText}>🔍</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Filters */}
-        {showFilters && renderFilterSection()}
-
         {/* Results Header */}
         <View style={styles.resultsHeader}>
           <Text style={styles.resultsTitle}>
             Available Properties ({filteredProperties.length})
+          </Text>
+          <Text style={styles.resultsSubtitle}>
+            Browse and apply to properties that match your requirements
           </Text>
           {loading && <ActivityIndicator size="small" color={colors.primary} />}
         </View>
@@ -401,6 +452,111 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
           />
         )}
       </ScrollView>
+
+      {/* Application Modal */}
+      <Modal
+        visible={showApplicationModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowApplicationModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Apply for Property</Text>
+              <TouchableOpacity 
+                onPress={() => setShowApplicationModal(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedProperty && (
+              <>
+                <View style={styles.propertySummary}>
+                  <Text style={styles.propertySummaryTitle}>{selectedProperty.name}</Text>
+                  <Text style={styles.propertySummaryType}>{selectedProperty.type.toUpperCase()}</Text>
+                  <Text style={styles.propertySummaryLocation}>
+                    📍 {selectedProperty.location.address}, {selectedProperty.location.city}
+                  </Text>
+                  <Text style={styles.propertySummaryRent}>
+                    Rent: ₹{selectedProperty.pricing.baseRent}/month
+                  </Text>
+                </View>
+
+                <View style={styles.formSection}>
+                  <Input
+                    label="Message to Owner (Optional)"
+                    placeholder="Tell the owner why you're interested in this property..."
+                    value={message}
+                    onChangeText={setMessage}
+                    multiline
+                    numberOfLines={3}
+                    style={styles.messageInput}
+                  />
+
+                  <Input
+                    label="Requested Rent (Optional)"
+                    placeholder="Enter your preferred rent amount"
+                    value={requestedRent}
+                    onChangeText={setRequestedRent}
+                    keyboardType="numeric"
+                    style={styles.rentInput}
+                  />
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity 
+                    style={styles.cancelButton}
+                    onPress={() => setShowApplicationModal(false)}
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.applyButton, applying && styles.applyButtonDisabled]}
+                    onPress={submitApplication}
+                    disabled={applying}
+                  >
+                    {applying ? (
+                      <ActivityIndicator size="small" color={colors.white} />
+                    ) : (
+                      <Text style={styles.applyButtonText}>Submit Application</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.filterModalContent}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Filter Properties</Text>
+              <TouchableOpacity 
+                onPress={() => setShowFilterModal(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.filterModalBody} showsVerticalScrollIndicator={false}>
+              {renderFilterSection()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -443,18 +599,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterSection: {
-    backgroundColor: colors.white,
-    padding: dimensions.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    backgroundColor: 'transparent',
+    padding: 0,
   },
   filterRow: {
     flexDirection: 'row',
     marginBottom: dimensions.spacing.md,
+    gap: dimensions.spacing.sm,
   },
   filterInput: {
     flex: 1,
-    marginRight: dimensions.spacing.sm,
   },
   filterGroup: {
     marginBottom: dimensions.spacing.lg,
@@ -468,6 +622,7 @@ const styles = StyleSheet.create({
   filterTags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: dimensions.spacing.sm,
   },
   filterTag: {
     paddingHorizontal: dimensions.spacing.md,
@@ -475,8 +630,6 @@ const styles = StyleSheet.create({
     borderRadius: dimensions.borderRadius.sm,
     borderWidth: 1,
     borderColor: colors.lightGray,
-    marginRight: dimensions.spacing.sm,
-    marginBottom: dimensions.spacing.sm,
   },
   filterTagActive: {
     backgroundColor: colors.primary,
@@ -491,20 +644,68 @@ const styles = StyleSheet.create({
   },
   filterActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: dimensions.spacing.sm,
+    marginTop: dimensions.spacing.lg,
+  },
+  cancelFilterButton: {
+    flex: 1,
+    backgroundColor: colors.lightGray,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.lg,
+    borderRadius: dimensions.borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    alignItems: 'center',
+  },
+  cancelFilterButtonText: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  clearFilterButton: {
+    flex: 1,
+    backgroundColor: colors.lightGray,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.lg,
+    borderRadius: dimensions.borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    alignItems: 'center',
+  },
+  clearFilterButtonText: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  applyFilterButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.lg,
+    borderRadius: dimensions.borderRadius.md,
+    alignItems: 'center',
+  },
+  applyFilterButtonText: {
+    fontSize: fonts.md,
+    color: colors.white,
+    fontWeight: '600',
   },
   resultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
     backgroundColor: colors.white,
   },
   resultsTitle: {
-    fontSize: fonts.md,
+    fontSize: fonts.lg,
     fontWeight: '600',
     color: colors.textPrimary,
+    marginBottom: dimensions.spacing.sm,
+  },
+  resultsSubtitle: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    marginBottom: dimensions.spacing.md,
+    lineHeight: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -615,6 +816,143 @@ const styles = StyleSheet.create({
     borderRadius: dimensions.borderRadius.sm,
     marginRight: dimensions.spacing.sm,
     marginBottom: dimensions.spacing.xs,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.lg,
+    padding: dimensions.spacing.lg,
+    width: '90%',
+    maxHeight: '80%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.lg,
+  },
+  modalTitle: {
+    fontSize: fonts.xl,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  closeButton: {
+    padding: dimensions.spacing.sm,
+  },
+  closeButtonText: {
+    fontSize: fonts.lg,
+    color: colors.textSecondary,
+  },
+  propertySummary: {
+    backgroundColor: colors.lightGray,
+    padding: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+    marginBottom: dimensions.spacing.lg,
+  },
+  propertySummaryTitle: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.xs,
+  },
+  propertySummaryType: {
+    fontSize: fonts.sm,
+    color: colors.primary,
+    backgroundColor: colors.lightPrimary,
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: dimensions.borderRadius.sm,
+    alignSelf: 'flex-start',
+    marginBottom: dimensions.spacing.xs,
+  },
+  propertySummaryLocation: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    marginBottom: dimensions.spacing.xs,
+  },
+  propertySummaryRent: {
+    fontSize: fonts.md,
+    fontWeight: '500',
+    color: colors.textPrimary,
+  },
+  formSection: {
+    marginBottom: dimensions.spacing.lg,
+  },
+  messageInput: {
+    marginBottom: dimensions.spacing.md,
+  },
+  rentInput: {
+    marginBottom: dimensions.spacing.md,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: dimensions.spacing.md,
+    marginTop: dimensions.spacing.lg,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.lg,
+    borderRadius: dimensions.borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  applyButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.lg,
+    borderRadius: dimensions.borderRadius.md,
+    alignItems: 'center',
+  },
+  applyButtonDisabled: {
+    opacity: 0.6,
+  },
+  applyButtonText: {
+    fontSize: fonts.md,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  // Filter Modal styles
+  filterModalContent: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.lg,
+    padding: 0,
+    width: '95%',
+    maxHeight: '90%',
+    maxWidth: 450,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  filterModalTitle: {
+    fontSize: fonts.xl,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  filterModalBody: {
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
   },
 });
 
