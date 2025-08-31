@@ -10,6 +10,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
@@ -183,9 +184,6 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
        <View style={styles.topBar}>
          <View style={styles.propertySelector}>
            <TouchableOpacity style={styles.propertyButton} onPress={handlePropertySwitch}>
-             <View style={styles.logoContainer}>
-               <Text style={styles.logoText}>RentOk</Text>
-             </View>
              <Text style={styles.propertyName}>
                {selectedProperty?.name || 'No Property Selected'}
              </Text>
@@ -482,44 +480,35 @@ const styles = StyleSheet.create({
      alignItems: 'center',
      justifyContent: 'space-between',
      paddingHorizontal: dimensions.spacing.lg,
-     paddingTop: dimensions.spacing.xl,
+     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : dimensions.spacing.md,
      paddingBottom: dimensions.spacing.md,
-     minHeight: 100,
+     minHeight: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 70 : 70,
    },
 
   propertySelector: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
      propertyButton: {
      flexDirection: 'row',
      alignItems: 'center',
      backgroundColor: 'rgba(255, 255, 255, 0.15)',
      paddingHorizontal: dimensions.spacing.lg,
-     paddingVertical: dimensions.spacing.md,
+     paddingVertical: dimensions.spacing.sm,
      borderRadius: dimensions.borderRadius.xl,
-   },
-     logoContainer: {
-     backgroundColor: colors.white,
-     borderRadius: 16,
-     width: 32,
-     height: 32,
+     minWidth: 120,
+     maxWidth: 280,
      justifyContent: 'center',
-     alignItems: 'center',
-     marginRight: dimensions.spacing.md,
    },
-  logoText: {
-    fontSize: fonts.sm,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
   propertyName: {
     fontSize: fonts.lg,
     color: colors.white,
     fontWeight: '600',
-    marginRight: dimensions.spacing.md,
-    maxWidth: 140,
+    marginRight: dimensions.spacing.sm,
+    maxWidth: 200,
     textAlign: 'center',
+    flexShrink: 1,
   },
   dropdownIcon: {
     fontSize: fonts.md,
