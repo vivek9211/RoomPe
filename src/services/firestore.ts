@@ -963,6 +963,43 @@ class FirestoreService {
       );
   }
 
+  /**
+   * Listen to tenant applications changes for a tenant
+   * @param tenantId - Tenant ID
+   * @param callback - Callback function to handle changes
+   * @returns Unsubscribe function
+   */
+  onTenantApplicationsByTenantChange(
+    tenantId: string,
+    callback: (applications: any[]) => void
+  ): () => void {
+    return this.tenantApplicationsCollection
+      .where('tenantId', '==', tenantId)
+      // Temporarily remove orderBy to avoid index requirement
+      // .orderBy('createdAt', 'desc')
+      .onSnapshot(
+        (snapshot) => {
+          const applications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          // Sort in memory instead
+          const sortedApplications = applications.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          
+          callback(sortedApplications);
+        },
+        (error) => {
+          console.error('Error listening to tenant applications changes:', error);
+          callback([]);
+        }
+      );
+  }
+
   // ==================== UTILITY METHODS ====================
 
   /**
