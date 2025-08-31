@@ -104,16 +104,6 @@ const OwnerTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="Properties"
-        component={PropertyListScreen}
-        options={{
-          tabBarLabel: 'Properties',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>🏢</Text>
-          ),
-        }}
-      />
-      <Tab.Screen
         name="Tenants"
         component={TenantListScreen}
         options={{
