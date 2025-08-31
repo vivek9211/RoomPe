@@ -844,10 +844,9 @@ class FirestoreService {
    */
   async getTenantApplicationsByTenant(tenantId: string): Promise<any[]> {
     try {
+      // First try with tenantId filter
       const snapshot = await this.tenantApplicationsCollection
         .where('tenantId', '==', tenantId)
-        // Temporarily remove orderBy to avoid index requirement
-        // .orderBy('createdAt', 'desc')
         .get();
 
       const applications = snapshot.docs.map(doc => ({
@@ -855,15 +854,40 @@ class FirestoreService {
         ...doc.data()
       }));
 
-      // Sort in memory instead
+      // Sort in memory
       return applications.sort((a, b) => {
         const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
         const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
         return dateB.getTime() - dateA.getTime();
       });
     } catch (error) {
-      console.error('Error fetching tenant applications:', error);
-      throw new Error('Failed to fetch tenant applications');
+      console.error('Error fetching tenant applications by tenantId:', error);
+      
+      // Fallback: try to get all applications and filter in memory
+      try {
+        console.log('Trying fallback approach...');
+        const allSnapshot = await this.tenantApplicationsCollection
+          .limit(100) // Limit to avoid performance issues
+          .get();
+
+        const allApplications = allSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Filter by tenantId in memory
+        const filteredApplications = allApplications.filter(app => app.tenantId === tenantId);
+        
+        // Sort in memory
+        return filteredApplications.sort((a, b) => {
+          const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+          const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+      } catch (fallbackError) {
+        console.error('Fallback approach also failed:', fallbackError);
+        throw new Error('Failed to fetch tenant applications');
+      }
     }
   }
 
