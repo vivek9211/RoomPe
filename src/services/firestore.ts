@@ -489,6 +489,93 @@ class FirestoreService {
       );
   }
 
+  /**
+   * Get all active properties with optional filters for tenant assignment
+   * @param filters - Optional filters for property search
+   * @returns Array of active properties matching the filters
+   */
+  async getActivePropertiesForTenants(filters?: {
+    city?: string;
+    postalCode?: string;
+    minRent?: number;
+    maxRent?: number;
+    propertyType?: string[];
+    amenities?: string[];
+  }): Promise<any[]> {
+    try {
+      // Start with active properties only
+      let query = this.propertiesCollection.where('status', '==', 'active');
+
+      // Apply filters if provided
+      if (filters?.city) {
+        query = query.where('location.city', '==', filters.city);
+      }
+
+      if (filters?.postalCode) {
+        query = query.where('location.postalCode', '==', filters.postalCode);
+      }
+
+      const snapshot = await query.get();
+      const properties: any[] = [];
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const property = {
+          id: doc.id,
+          ...data,
+        };
+
+        // Apply additional filters in JavaScript to avoid complex Firestore queries
+        let shouldInclude = true;
+
+        // Filter by rent range
+        if (filters?.minRent && property.pricing?.baseRent < filters.minRent) {
+          shouldInclude = false;
+        }
+        if (filters?.maxRent && property.pricing?.baseRent > filters.maxRent) {
+          shouldInclude = false;
+        }
+
+        // Filter by property type
+        if (filters?.propertyType && filters.propertyType.length > 0) {
+          if (!filters.propertyType.includes(property.type)) {
+            shouldInclude = false;
+          }
+        }
+
+        // Filter by amenities (if any amenities are required)
+        if (filters?.amenities && filters.amenities.length > 0) {
+          const propertyAmenities = property.amenities || {};
+          const hasRequiredAmenities = filters.amenities.every(amenity => 
+            propertyAmenities[amenity] === true
+          );
+          if (!hasRequiredAmenities) {
+            shouldInclude = false;
+          }
+        }
+
+        // Only include properties with available rooms
+        if (property.availableRooms <= 0) {
+          shouldInclude = false;
+        }
+
+        if (shouldInclude) {
+          properties.push(property);
+        }
+      });
+
+      // Sort by createdAt in descending order
+      return properties.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error fetching active properties for tenants:', error);
+      throw new Error('Failed to fetch properties');
+    }
+  }
+
   // ==================== REAL-TIME LISTENERS ====================
 
   /**

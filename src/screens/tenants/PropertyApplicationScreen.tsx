@@ -41,18 +41,8 @@ const PropertyApplicationScreen: React.FC<PropertyApplicationScreenProps> = ({ n
   const loadAvailableProperties = async () => {
     try {
       setLoading(true);
-      // Get all active properties that have available rooms
-      const snapshot = await firestore()
-        .collection('properties')
-        .where('status', '==', 'active')
-        .where('availableRooms', '>', 0)
-        .get();
-
-      const propertiesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Property[];
-
+      // Use the firestoreService method that handles filtering properly
+      const propertiesData = await firestoreService.getActivePropertiesForTenants();
       setProperties(propertiesData);
     } catch (error) {
       console.error('Error loading properties:', error);

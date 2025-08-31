@@ -64,6 +64,9 @@ import FinancialReportScreen from '../screens/reports/FinancialReportScreen';
 // Settings Screens
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import ProfileScreen from '../screens/settings/ProfileScreen';
+import TenantSettingsScreen from '../screens/settings/TenantSettingsScreen';
+import AssignPropertyScreen from '../screens/settings/AssignPropertyScreen';
+import NotificationSettingsScreen from '../screens/settings/NotificationSettingsScreen';
 
 // Analytics Screen
 import AnalyticsScreen from '../screens/dashboard/AnalyticsScreen';
@@ -193,7 +196,7 @@ const TenantTabNavigator = () => {
       />
       <Tab.Screen
         name="Settings"
-        component={SettingsScreen}
+        component={TenantSettingsScreen}
         options={{
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
@@ -274,6 +277,8 @@ const AppNavigator = () => {
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
             <Stack.Screen name="PropertyApplication" component={PropertyApplicationScreen} />
+            <Stack.Screen name="AssignProperty" component={AssignPropertyScreen} />
+            <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           </>
