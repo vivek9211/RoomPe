@@ -10,14 +10,17 @@ import {
   StatusBar,
   ActivityIndicator,
   FlatList,
+  Dimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { colors, fonts, dimensions } from '../../constants';
+import { colors, fonts, dimensions as appDimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { firestoreService } from '../../services/firestore';
 import { TenantApplication, TenantApplicationStatus } from '../../types/tenant.types';
 import { User } from '../../types/user.types';
 import { Property } from '../../types/property.types';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 interface TenantApplicationsScreenProps {
   navigation: any;
@@ -29,11 +32,15 @@ interface ApplicationWithDetails extends TenantApplication {
   propertyDetails?: Property;
 }
 
+type FilterType = 'all' | 'pending' | 'approved' | 'rejected';
+
 const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ navigation, route }) => {
   const { userProfile } = useAuth();
   const [applications, setApplications] = useState<ApplicationWithDetails[]>([]);
+  const [filteredApplications, setFilteredApplications] = useState<ApplicationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   useEffect(() => {
     if (userProfile?.uid) {
@@ -70,6 +77,18 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
       return () => unsubscribe();
     }
   }, [userProfile?.uid]);
+
+  useEffect(() => {
+    filterApplications();
+  }, [applications, activeFilter]);
+
+  const filterApplications = () => {
+    if (activeFilter === 'all') {
+      setFilteredApplications(applications);
+    } else {
+      setFilteredApplications(applications.filter(app => app.status === activeFilter));
+    }
+  };
 
   const loadTenantApplications = async () => {
     try {
@@ -131,85 +150,164 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return colors.warning;
+      case 'approved': return colors.success;
+      case 'rejected': return colors.error;
+      default: return colors.gray;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'PENDING';
+      case 'approved': return 'APPROVED';
+      case 'rejected': return 'REJECTED';
+      default: return 'UNKNOWN';
+    }
+  };
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'Unknown';
+    const date = timestamp.toDate?.() || new Date(timestamp);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return '?';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const renderFilterTab = (filter: FilterType, label: string, count: number) => (
+    <TouchableOpacity
+      style={[
+        styles.filterTab,
+        activeFilter === filter && styles.filterTabActive
+      ]}
+      onPress={() => setActiveFilter(filter)}
+    >
+      <Text style={[
+        styles.filterTabText,
+        activeFilter === filter && styles.filterTabTextActive
+      ]}>
+        {label}
+      </Text>
+      <View style={[
+        styles.filterCount,
+        activeFilter === filter && styles.filterCountActive
+      ]}>
+        <Text style={[
+          styles.filterCountText,
+          activeFilter === filter && styles.filterCountTextActive
+        ]}>
+          {count}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   const renderApplicationItem = ({ item }: { item: ApplicationWithDetails }) => (
     <View style={styles.applicationCard}>
-      <View style={styles.applicationHeader}>
-        <Text style={styles.applicationTitle}>
-          Application from {item.tenantDetails?.name || 'Unknown Tenant'}
-        </Text>
-        <Text style={styles.applicationDate}>
-          {item.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown Date'}
-        </Text>
+      {/* Compact header */}
+      <View style={styles.cardHeader}>
+        <View style={styles.tenantInfo}>
+          <View style={styles.tenantAvatar}>
+            <Text style={styles.avatarText}>
+              {getInitials(item.tenantDetails?.name || 'Unknown')}
+            </Text>
+          </View>
+          <View style={styles.tenantDetails}>
+            <Text style={styles.tenantName}>
+              {item.tenantDetails?.name || 'Unknown Tenant'}
+            </Text>
+            <Text style={styles.tenantEmail}>
+              {item.tenantDetails?.email || 'No email'}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+        </View>
       </View>
 
-      <View style={styles.applicationDetails}>
-        <Text style={styles.detailLabel}>Property:</Text>
-        <Text style={styles.detailValue}>
-          {item.propertyDetails?.name || 'Unknown Property'}
-        </Text>
-
-        <Text style={styles.detailLabel}>Tenant:</Text>
-        <Text style={styles.detailValue}>
-          {item.tenantDetails?.name || 'Unknown'} ({item.tenantDetails?.email || 'No email'})
-        </Text>
-
-        <Text style={styles.detailLabel}>Phone:</Text>
-        <Text style={styles.detailValue}>
-          {item.tenantDetails?.phone || 'No phone'}
-        </Text>
-
-        {item.message && (
-          <>
-            <Text style={styles.detailLabel}>Message:</Text>
-            <Text style={styles.detailValue}>{item.message}</Text>
-          </>
-        )}
+      {/* Compact details */}
+      <View style={styles.cardContent}>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Property:</Text>
+          <Text style={styles.detailValue}>
+            {item.propertyDetails?.name || 'Unknown Property'}
+          </Text>
+        </View>
+        
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Applied:</Text>
+          <Text style={styles.detailValue}>{formatDate(item.createdAt)}</Text>
+        </View>
 
         {item.requestedRent && (
-          <>
-            <Text style={styles.detailLabel}>Requested Rent:</Text>
-            <Text style={styles.detailValue}>₹{item.requestedRent} / month</Text>
-          </>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Rent:</Text>
+            <Text style={styles.rentValue}>₹{item.requestedRent.toLocaleString()}/month</Text>
+          </View>
         )}
       </View>
 
-      <View style={styles.applicationActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.rejectButton]}
-          onPress={() => handleApplicationAction(item.id, 'reject')}
-          disabled={processing === item.id}
-        >
-          {processing === item.id ? (
-            <ActivityIndicator color={colors.white} size="small" />
-          ) : (
-            <Text style={styles.actionButtonText}>Reject</Text>
-          )}
-        </TouchableOpacity>
+      {/* Action buttons - only show for pending applications */}
+      {item.status === 'pending' && (
+        <View style={styles.actionContainer}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.rejectButton]}
+            onPress={() => handleApplicationAction(item.id, 'reject')}
+            disabled={processing === item.id}
+          >
+            {processing === item.id ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <Text style={styles.actionButtonText}>Reject</Text>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.approveButton]}
-          onPress={() => handleApplicationAction(item.id, 'approve')}
-          disabled={processing === item.id}
-        >
-          {processing === item.id ? (
-            <ActivityIndicator color={colors.white} size="small" />
-          ) : (
-            <Text style={styles.actionButtonText}>Approve</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.approveButton]}
+            onPress={() => handleApplicationAction(item.id, 'approve')}
+            disabled={processing === item.id}
+          >
+            {processing === item.id ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <Text style={styles.actionButtonText}>Approve</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
+
+  const getFilterCounts = () => {
+    const counts = {
+      all: applications.length,
+      pending: applications.filter(app => app.status === 'pending').length,
+      approved: applications.filter(app => app.status === 'approved').length,
+      rejected: applications.filter(app => app.status === 'rejected').length,
+    };
+    return counts;
+  };
+
+  const filterCounts = getFilterCounts();
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
-        barStyle="dark-content"
-        backgroundColor={colors.background}
+        barStyle="light-content"
+        backgroundColor={colors.primary}
         translucent={false}
       />
       
-      {/* Header */}
+      {/* Simplified Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -218,7 +316,17 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Tenant Applications</Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity style={styles.refreshButton} onPress={loadTenantApplications}>
+          <Text style={styles.refreshIcon}>↻</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter Tabs */}
+      <View style={styles.filterContainer}>
+        {renderFilterTab('all', 'All', filterCounts.all)}
+        {renderFilterTab('pending', 'Pending', filterCounts.pending)}
+        {renderFilterTab('approved', 'Approved', filterCounts.approved)}
+        {renderFilterTab('rejected', 'Rejected', filterCounts.rejected)}
       </View>
 
       {loading ? (
@@ -227,31 +335,25 @@ const TenantApplicationsScreen: React.FC<TenantApplicationsScreenProps> = ({ nav
           <Text style={styles.loadingText}>Loading applications...</Text>
         </View>
       ) : (
-        <>
-          <View style={styles.content}>
-            <Text style={styles.sectionTitle}>Pending Applications</Text>
-            <Text style={styles.sectionSubtitle}>
-              Review and manage tenant applications for your properties
-            </Text>
-          </View>
-
-          <FlatList
-            data={applications}
-            renderItem={renderApplicationItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyIcon}>📋</Text>
-                <Text style={styles.emptyTitle}>No Applications</Text>
-                <Text style={styles.emptySubtitle}>
-                  You don't have any pending tenant applications at the moment.
-                </Text>
-              </View>
-            }
-          />
-        </>
+        <FlatList
+          data={filteredApplications}
+          renderItem={renderApplicationItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>📋</Text>
+              <Text style={styles.emptyTitle}>No Applications</Text>
+              <Text style={styles.emptySubtitle}>
+                {activeFilter === 'all' 
+                  ? 'You don\'t have any tenant applications yet.'
+                  : `No ${activeFilter} applications found.`
+                }
+              </Text>
+            </View>
+          }
+        />
       )}
     </SafeAreaView>
   );
@@ -266,101 +368,198 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: appDimensions.spacing.lg,
+    paddingVertical: appDimensions.spacing.md,
     height: 56,
   },
   backButton: {
-    marginRight: dimensions.spacing.md,
+    marginRight: appDimensions.spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backIcon: {
-    fontSize: 24,
+    fontSize: 20,
     color: colors.white,
     fontWeight: 'bold',
   },
   headerTitle: {
-    fontSize: fonts.lg,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.white,
     flex: 1,
     textAlign: 'center',
   },
-  placeholder: {
+  refreshButton: {
     width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  content: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.lg,
+  refreshIcon: {
+    fontSize: 16,
+    color: colors.white,
+    fontWeight: '600',
   },
-  sectionTitle: {
-    fontSize: fonts.xl,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.sm,
+  filterContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    paddingHorizontal: appDimensions.spacing.md,
+    paddingVertical: appDimensions.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
   },
-  sectionSubtitle: {
-    fontSize: fonts.md,
+  filterTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: appDimensions.spacing.sm,
+    paddingHorizontal: appDimensions.spacing.sm,
+    borderRadius: appDimensions.borderRadius.md,
+    marginHorizontal: 2,
+  },
+  filterTabActive: {
+    backgroundColor: colors.lightPrimary,
+  },
+  filterTabText: {
+    fontSize: 14,
+    fontWeight: '500',
     color: colors.textSecondary,
-    lineHeight: 22,
+    marginRight: 4,
+  },
+  filterTabTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  filterCount: {
+    backgroundColor: colors.lightGray,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  filterCountActive: {
+    backgroundColor: colors.primary,
+  },
+  filterCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  filterCountTextActive: {
+    color: colors.white,
   },
   listContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingBottom: dimensions.spacing.xl,
+    paddingHorizontal: appDimensions.spacing.md,
+    paddingBottom: appDimensions.spacing.lg,
+    paddingTop: appDimensions.spacing.md,
   },
   applicationCard: {
     backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.lg,
-    padding: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.lg,
+    borderRadius: appDimensions.borderRadius.md,
+    marginBottom: appDimensions.spacing.md,
     shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
   },
-  applicationHeader: {
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: appDimensions.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  tenantInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  tenantAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: appDimensions.spacing.sm,
+  },
+  avatarText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tenantDetails: {
+    flex: 1,
+  },
+  tenantName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  tenantEmail: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  statusBadge: {
+    borderRadius: 12,
+    paddingHorizontal: appDimensions.spacing.sm,
+    paddingVertical: 4,
+  },
+  statusText: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  cardContent: {
+    padding: appDimensions.spacing.md,
+  },
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.lg,
+    marginBottom: appDimensions.spacing.sm,
   },
-  applicationTitle: {
-    fontSize: fonts.lg,
+  detailLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  detailValue: {
+    fontSize: 13,
     fontWeight: '600',
     color: colors.textPrimary,
     flex: 1,
+    textAlign: 'right',
   },
-  applicationDate: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-  },
-  applicationDetails: {
-    marginBottom: dimensions.spacing.lg,
-  },
-  detailLabel: {
-    fontSize: fonts.md,
+  rentValue: {
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.xs,
+    color: colors.success,
+    textAlign: 'right',
   },
-  detailValue: {
-    fontSize: fonts.md,
-    color: colors.textSecondary,
-    marginBottom: dimensions.spacing.md,
-    lineHeight: 20,
-  },
-  applicationActions: {
+  actionContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: dimensions.spacing.md,
+    paddingHorizontal: appDimensions.spacing.md,
+    paddingBottom: appDimensions.spacing.md,
+    gap: appDimensions.spacing.sm,
   },
   actionButton: {
     flex: 1,
-    borderRadius: dimensions.borderRadius.md,
-    paddingVertical: dimensions.spacing.md,
+    borderRadius: appDimensions.borderRadius.md,
+    paddingVertical: appDimensions.spacing.sm,
     alignItems: 'center',
   },
   rejectButton: {
@@ -371,7 +570,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: colors.white,
-    fontSize: fonts.md,
+    fontSize: 14,
     fontWeight: '600',
   },
   loadingContainer: {
@@ -380,31 +579,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: fonts.md,
+    fontSize: 16,
     color: colors.textSecondary,
-    marginTop: dimensions.spacing.md,
+    marginTop: appDimensions.spacing.md,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: dimensions.spacing.xl * 2,
+    paddingVertical: appDimensions.spacing.xl * 2,
   },
   emptyIcon: {
-    fontSize: 64,
-    marginBottom: dimensions.spacing.lg,
+    fontSize: 48,
+    marginBottom: appDimensions.spacing.lg,
   },
   emptyTitle: {
-    fontSize: fonts.lg,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: dimensions.spacing.sm,
+    marginBottom: appDimensions.spacing.sm,
+    textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: fonts.md,
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
   },
 });
 

@@ -752,7 +752,8 @@ class FirestoreService {
       const snapshot = await this.tenantApplicationsCollection
         .where('ownerId', '==', ownerId)
         .where('status', '==', 'pending')
-        .orderBy('createdAt', 'desc')
+        // Temporarily remove orderBy to avoid index requirement
+        // .orderBy('createdAt', 'desc')
         .get();
 
       const applications = snapshot.docs.map(doc => ({
@@ -760,7 +761,12 @@ class FirestoreService {
         ...doc.data()
       }));
 
-      return applications;
+      // Sort in memory instead
+      return applications.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
     } catch (error) {
       console.error('Error fetching tenant applications:', error);
       throw new Error('Failed to fetch tenant applications');
@@ -776,7 +782,8 @@ class FirestoreService {
     try {
       const snapshot = await this.tenantApplicationsCollection
         .where('tenantId', '==', tenantId)
-        .orderBy('createdAt', 'desc')
+        // Temporarily remove orderBy to avoid index requirement
+        // .orderBy('createdAt', 'desc')
         .get();
 
       const applications = snapshot.docs.map(doc => ({
@@ -784,7 +791,12 @@ class FirestoreService {
         ...doc.data()
       }));
 
-      return applications;
+      // Sort in memory instead
+      return applications.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
     } catch (error) {
       console.error('Error fetching tenant applications:', error);
       throw new Error('Failed to fetch tenant applications');
@@ -825,14 +837,23 @@ class FirestoreService {
     return this.tenantApplicationsCollection
       .where('ownerId', '==', ownerId)
       .where('status', '==', 'pending')
-      .orderBy('createdAt', 'desc')
+      // Temporarily remove orderBy to avoid index requirement
+      // .orderBy('createdAt', 'desc')
       .onSnapshot(
         (snapshot) => {
           const applications = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
           }));
-          callback(applications);
+          
+          // Sort in memory instead
+          const sortedApplications = applications.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          
+          callback(sortedApplications);
         },
         (error) => {
           console.error('Error listening to tenant applications changes:', error);
