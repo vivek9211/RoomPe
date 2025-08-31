@@ -219,7 +219,12 @@ export enum RoomSharingType {
 export enum UnitType {
   ROOM = 'room',
   RK = 'rk',
-  BHK = 'bhk',
+  BHK_1 = 'bhk_1',
+  BHK_2 = 'bhk_2',
+  BHK_3 = 'bhk_3',
+  BHK_4 = 'bhk_4',
+  BHK_5 = 'bhk_5',
+  BHK_6 = 'bhk_6',
   STUDIO_APARTMENT = 'studio_apartment',
 }
 

@@ -117,7 +117,7 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
       Alert.alert('Success', 'Room mapping saved successfully!', [
         {
           text: 'OK',
-          onPress: () => navigation.navigate('RoomMappingComplete', { property }),
+          onPress: () => navigation.navigate('RoomManagement', { property }),
         },
       ]);
     } catch (error) {
@@ -284,7 +284,7 @@ const FloorConfigurationScreen: React.FC<FloorConfigurationScreenProps> = ({ nav
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('RoomMappingComplete', { property })}
+            onPress={() => navigation.navigate('RoomManagement', { property })}
           >
             <Text style={styles.actionButtonIcon}>👆</Text>
             <Text style={styles.actionButtonText}>Go to Rooms</Text>

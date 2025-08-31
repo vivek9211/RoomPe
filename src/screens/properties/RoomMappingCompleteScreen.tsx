@@ -25,8 +25,8 @@ const RoomMappingCompleteScreen: React.FC<RoomMappingCompleteScreenProps> = ({ n
   };
 
   const handleViewRooms = () => {
-    // TODO: Navigate to room management screen
-    Alert.alert('Info', 'Room management screen coming soon!');
+    // Navigate to the existing RoomManagement screen
+    navigation.navigate('RoomManagement', { property });
   };
 
   if (!property) {

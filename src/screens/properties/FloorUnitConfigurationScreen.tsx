@@ -26,7 +26,7 @@ interface FloorUnitConfigurationScreenProps {
 const FloorUnitConfigurationScreen: React.FC<FloorUnitConfigurationScreenProps> = ({ navigation, route }) => {
   const { property, floorConfig, floorIndex, onUpdate } = route.params || {};
   const [config, setConfig] = useState<FloorRoomConfig>(floorConfig);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['room']));
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['room', 'bhk']));
 
   useEffect(() => {
     if (floorConfig) {
@@ -83,8 +83,23 @@ const FloorUnitConfigurationScreen: React.FC<FloorUnitConfigurationScreenProps> 
         case UnitType.RK:
           bedCount = 1;
           break;
-        case UnitType.BHK:
-          bedCount = 2; // Default to 2 BHK
+        case UnitType.BHK_1:
+          bedCount = 1;
+          break;
+        case UnitType.BHK_2:
+          bedCount = 2;
+          break;
+        case UnitType.BHK_3:
+          bedCount = 3;
+          break;
+        case UnitType.BHK_4:
+          bedCount = 4;
+          break;
+        case UnitType.BHK_5:
+          bedCount = 5;
+          break;
+        case UnitType.BHK_6:
+          bedCount = 6;
           break;
         case UnitType.STUDIO_APARTMENT:
           bedCount = 1;
@@ -173,12 +188,11 @@ const FloorUnitConfigurationScreen: React.FC<FloorUnitConfigurationScreenProps> 
       case UnitType.RK:
         bedCount = 1;
         break;
-      case UnitType.BHK:
-        bedCount = 2;
-        break;
       case UnitType.STUDIO_APARTMENT:
         bedCount = 1;
         break;
+      default:
+        bedCount = 1;
     }
 
     return (
@@ -218,6 +232,67 @@ const FloorUnitConfigurationScreen: React.FC<FloorUnitConfigurationScreenProps> 
                 </TouchableOpacity>
               </View>
             </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderBHKSection = () => {
+    const isExpanded = expandedSections.has('bhk');
+    const bhkTypes = [
+      { type: UnitType.BHK_1, label: '1 BHK', bedCount: 1 },
+      { type: UnitType.BHK_2, label: '2 BHK', bedCount: 2 },
+      { type: UnitType.BHK_3, label: '3 BHK', bedCount: 3 },
+      { type: UnitType.BHK_4, label: '4 BHK', bedCount: 4 },
+      { type: UnitType.BHK_5, label: '5 BHK', bedCount: 5 },
+      { type: UnitType.BHK_6, label: '6 BHK', bedCount: 6 },
+    ];
+
+    const totalBHKUnits = bhkTypes.reduce((sum, bhk) => sum + (config.unitConfigs[bhk.type] || 0), 0);
+    const totalBHKBeds = bhkTypes.reduce((sum, bhk) => sum + ((config.unitConfigs[bhk.type] || 0) * bhk.bedCount), 0);
+
+    return (
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.sectionHeader}
+          onPress={() => toggleSection('bhk')}
+        >
+          <Text style={styles.sectionTitle}>BHK</Text>
+          <View style={styles.sectionTag}>
+            <Text style={styles.sectionTagText}>
+              {totalBHKUnits} Unit/ {totalBHKBeds} Bed
+            </Text>
+          </View>
+          <Text style={styles.expandIcon}>
+            {isExpanded ? '>' : '>'}
+          </Text>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.sectionContent}>
+            {bhkTypes.map(({ type, label, bedCount }) => (
+              <View key={type} style={styles.sharingRow}>
+                <Text style={styles.sharingLabel}>{label}</Text>
+                <View style={styles.counterContainer}>
+                  <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={() => updateUnitCount(type, -1)}
+                  >
+                    <Text style={styles.counterButtonText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>
+                    {config.unitConfigs[type] || 0}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={() => updateUnitCount(type, 1)}
+                  >
+                    <Text style={styles.counterButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
           </View>
         )}
       </View>
@@ -270,7 +345,7 @@ const FloorUnitConfigurationScreen: React.FC<FloorUnitConfigurationScreenProps> 
         {renderUnitSection(UnitType.RK, 'RK')}
 
         {/* BHK Section */}
-        {renderUnitSection(UnitType.BHK, 'BHK')}
+        {renderBHKSection()}
 
         {/* Studio Apartment Section */}
         {renderUnitSection(UnitType.STUDIO_APARTMENT, 'Studio Apartment')}

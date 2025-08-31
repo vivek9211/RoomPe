@@ -126,12 +126,17 @@ const RoomMappingScreen: React.FC<RoomMappingScreenProps> = ({ navigation, route
           [RoomSharingType.EIGHT_SHARING]: 0,
           [RoomSharingType.NINE_SHARING]: 0,
         },
-        unitConfigs: {
-          [UnitType.ROOM]: 0,
-          [UnitType.RK]: 0,
-          [UnitType.BHK]: 0,
-          [UnitType.STUDIO_APARTMENT]: 0,
-        },
+                 unitConfigs: {
+           [UnitType.ROOM]: 0,
+           [UnitType.RK]: 0,
+           [UnitType.BHK_1]: 0,
+           [UnitType.BHK_2]: 0,
+           [UnitType.BHK_3]: 0,
+           [UnitType.BHK_4]: 0,
+           [UnitType.BHK_5]: 0,
+           [UnitType.BHK_6]: 0,
+           [UnitType.STUDIO_APARTMENT]: 0,
+         },
       });
     }
     
