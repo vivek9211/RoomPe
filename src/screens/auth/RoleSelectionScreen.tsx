@@ -21,8 +21,8 @@ const RoleSelectionScreen: React.FC<RoleSelectionScreenProps> = ({ navigation })
     try {
       setLoading(true);
       await completeGoogleOnboarding(role);
-      // Skip onboarding and go directly to dashboard
-      navigation.navigate('Dashboard');
+      // Don't navigate here - let the AppNavigator handle the routing
+      // The user will be automatically redirected based on their role
     } catch (e: any) {
       Alert.alert('Failed to complete setup', e.message || 'Please try again.');
     } finally {

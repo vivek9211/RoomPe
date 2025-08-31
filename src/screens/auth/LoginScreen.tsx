@@ -56,7 +56,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       }
 
       console.log('Login successful');
-      navigation.navigate('Dashboard');
+      // Don't navigate here - let the AppNavigator handle the routing
+      // The user will be automatically redirected based on their role
     } catch (error: any) {
       Alert.alert('Login Failed', error.message);
     } finally {
@@ -95,11 +96,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
         console.log('Navigating to RoleSelection - Profile:', !!profile, 'Role:', roleValue);
         navigation.navigate('RoleSelection');
       } else if (!onboardingCompleted) {
-        console.log('Skipping Onboarding - navigating to Dashboard');
-        navigation.navigate('Dashboard');
+        console.log('Profile exists but onboarding not completed - letting AppNavigator handle routing');
+        // Don't navigate here - let the AppNavigator handle the routing
+        // The user will be automatically redirected based on their role and onboarding status
       } else {
-        console.log('Navigating to Dashboard - Profile exists with role and onboarding completed');
-        navigation.navigate('Dashboard');
+        console.log('Profile exists with role and onboarding completed - letting AppNavigator handle routing');
+        // Don't navigate here - let the AppNavigator handle the routing
+        // The user will be automatically redirected based on their role
       }
     } catch (error: any) {
       Alert.alert('Google Login Failed', error.message || 'Unable to sign in with Google. Please try again.');
@@ -116,9 +119,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     navigation.navigate('Register');
   };
 
-  const handleRegisterAsTenant = () => {
-    navigation.navigate('TenantRegistration');
-  };
+
 
   const handleBack = () => {
     navigation.goBack();
@@ -210,10 +211,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
             />
           </View>
 
-          {/* Register as Tenant Button */}
-          <TouchableOpacity style={styles.registerAsTenantButton} onPress={handleRegisterAsTenant}>
-            <Text style={styles.registerAsTenantButtonText}>Register as Tenant</Text>
-          </TouchableOpacity>
+
 
           {/* Register Link */}
           <View style={styles.registerContainer}>
@@ -320,19 +318,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600' as const,
   },
-  registerAsTenantButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.md,
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.lg,
-  },
-  registerAsTenantButtonText: {
-    color: colors.white,
-    fontSize: fonts.md,
-    fontWeight: '600',
-  },
+
 });
 
 export default LoginScreen;

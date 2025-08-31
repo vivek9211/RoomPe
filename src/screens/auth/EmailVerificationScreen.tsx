@@ -9,7 +9,7 @@ interface EmailVerificationScreenProps {
 }
 
 const EmailVerificationScreen: React.FC<EmailVerificationScreenProps> = ({ navigation }) => {
-  const { sendEmailVerification, isEmailVerified } = useAuth();
+  const { sendEmailVerification, isEmailVerified, refreshUserProfile } = useAuth();
   const [checking, setChecking] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -31,7 +31,9 @@ const EmailVerificationScreen: React.FC<EmailVerificationScreenProps> = ({ navig
       const verified = await isEmailVerified(true);
       if (verified) {
         Alert.alert('Email verified', 'Thank you!');
-        navigation.navigate('Dashboard');
+        // Refresh user profile to update emailVerified status
+        await refreshUserProfile();
+        // The AppNavigator will automatically route to the appropriate dashboard
       } else {
         Alert.alert('Not verified yet', 'Please verify your email and try again.');
       }

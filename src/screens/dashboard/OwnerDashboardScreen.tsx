@@ -137,6 +137,9 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
       case 'addTenant':
         navigation.navigate('AddTenant');
         break;
+      case 'viewApplications':
+        navigation.navigate('TenantApplications');
+        break;
       case 'receivePayment':
         navigation.navigate('AddPayment');
         break;
@@ -362,6 +365,27 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
              >
               <TouchableOpacity
                 style={styles.quickActionButton}
+                onPress={() => handleQuickAction('viewApplications')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.actionIcon}>📋</Text>
+                <Text style={styles.actionLabel}>Applications</Text>
+              </TouchableOpacity>
+            </Animated.View>
+            
+                         <Animated.View
+               style={{
+                 transform: [{
+                   scale: scrollY.interpolate({
+                     inputRange: [160, 240],
+                     outputRange: [1, 1.05],
+                     extrapolate: 'clamp',
+                   }),
+                 }],
+               }}
+             >
+              <TouchableOpacity
+                style={styles.quickActionButton}
                 onPress={() => handleQuickAction('receivePayment')}
                 activeOpacity={0.7}
               >
@@ -386,7 +410,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
                 onPress={() => handleQuickAction('addDues')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionIcon}>📋</Text>
+                <Text style={styles.actionIcon}>💰</Text>
                 <Text style={styles.actionLabel}>Add Dues</Text>
               </TouchableOpacity>
             </Animated.View>
@@ -437,7 +461,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
           {/* Scroll Indicator */}
           <View style={styles.scrollIndicator}>
             <View style={styles.scrollDots}>
-              {[0, 1, 2, 3, 4].map((index) => (
+              {[0, 1, 2, 3, 4, 5].map((index) => (
                 <Animated.View
                   key={index}
                   style={[

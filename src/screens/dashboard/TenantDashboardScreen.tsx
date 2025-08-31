@@ -62,6 +62,10 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     Alert.alert('Stories', 'View property updates and announcements');
   };
 
+  const handleFindProperties = () => {
+    navigation.navigate('PropertyApplication');
+  };
+
   const handleNotifications = () => {
     Alert.alert('Notifications', 'View your notifications');
   };
@@ -249,6 +253,11 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
             <TouchableOpacity style={styles.lifeCard} onPress={handleAttendance}>
               <Text style={styles.lifeCardTitle}>Attendance</Text>
               <Text style={styles.lifeCardSubtitle}>Mark your attendance for leave requests</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.lifeCard} onPress={handleFindProperties}>
+              <Text style={styles.lifeCardTitle}>Find Properties</Text>
+              <Text style={styles.lifeCardSubtitle}>Browse and apply to available properties</Text>
             </TouchableOpacity>
           </View>
         </View>

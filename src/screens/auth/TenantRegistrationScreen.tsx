@@ -15,12 +15,14 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { firestoreService } from '../../services/firestore';
 import { UserRole } from '../../types/user.types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface TenantRegistrationScreenProps {
   navigation: any;
 }
 
 const TenantRegistrationScreen: React.FC<TenantRegistrationScreenProps> = ({ navigation }) => {
+  const { signUp } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -71,16 +73,25 @@ const TenantRegistrationScreen: React.FC<TenantRegistrationScreenProps> = ({ nav
     try {
       setLoading(true);
       
-      // TODO: Implement actual Firebase Auth registration
-      // For now, we'll just create a user profile with tenant role
+      // Create the tenant account using the existing signUp function
+      await signUp(
+        formData.email,
+        formData.password,
+        formData.name,
+        formData.phone,
+        'tenant'
+      );
       
       Alert.alert(
         'Registration Successful',
-        'Your tenant account has been created successfully. You can now login.',
+        'Your tenant account has been created successfully. Please check your email for verification.',
         [
           {
             text: 'OK',
-            onPress: () => navigation.navigate('Login')
+            onPress: () => {
+              // Don't navigate here - let the AppNavigator handle the routing
+              // The user will be automatically redirected to EmailVerification if needed
+            }
           }
         ]
       );

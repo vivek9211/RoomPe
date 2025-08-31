@@ -226,3 +226,45 @@ export interface TenantMaintenanceHistory {
   resolvedAt?: Timestamp;
   priority: 'low' | 'medium' | 'high' | 'urgent';
 }
+
+// Tenant application status enumeration
+export enum TenantApplicationStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  WITHDRAWN = 'withdrawn'
+}
+
+// Tenant application interface for self-assignment
+export interface TenantApplication {
+  id: string; // Document ID
+  tenantId: string; // UID of the tenant user
+  propertyId: string; // Property they want to apply for
+  ownerId: string; // Owner of the property
+  status: TenantApplicationStatus;
+  message?: string; // Optional message from tenant
+  requestedRent?: number; // Rent amount tenant is willing to pay
+  requestedMoveInDate?: Timestamp; // When tenant wants to move in
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string; // UID of the owner who reviewed
+  reviewNotes?: string; // Notes from owner during review
+}
+
+// Create tenant application data
+export interface CreateTenantApplicationData {
+  tenantId: string;
+  propertyId: string;
+  ownerId: string;
+  message?: string;
+  requestedRent?: number;
+  requestedMoveInDate?: Timestamp;
+}
+
+// Update tenant application data
+export interface UpdateTenantApplicationData {
+  status?: TenantApplicationStatus;
+  reviewNotes?: string;
+  reviewedBy?: string;
+}

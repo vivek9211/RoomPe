@@ -43,6 +43,9 @@ export const colors = {
   // Accent color
   accent: '#A78BFA', // Violet 400 - Brand pop
   
+  // Light primary for backgrounds
+  lightPrimary: '#EEF2FF', // Indigo 50
+  
   // Transparent colors
   transparent: 'transparent',
   overlay: 'rgba(0, 0, 0, 0.5)',
