@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import TenantRegistrationScreen from '../screens/auth/TenantRegistrationScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
@@ -28,6 +29,15 @@ import PropertyListScreen from '../screens/properties/PropertyListScreen';
 import PropertyDetailScreen from '../screens/properties/PropertyDetailScreen';
 import AddPropertyScreen from '../screens/properties/AddPropertyScreen';
 import EditPropertyScreen from '../screens/properties/EditPropertyScreen';
+
+// Room Mapping Screens
+import RoomMappingScreen from '../screens/properties/RoomMappingScreen';
+import FloorConfigurationScreen from '../screens/properties/FloorConfigurationScreen';
+import FloorUnitConfigurationScreen from '../screens/properties/FloorUnitConfigurationScreen';
+import RoomMappingCompleteScreen from '../screens/properties/RoomMappingCompleteScreen';
+
+// Room Management Screen
+import RoomManagementScreen from '../screens/properties/RoomManagementScreen';
 
 // Tenant Screens
 import TenantListScreen from '../screens/tenants/TenantListScreen';
@@ -209,6 +219,7 @@ const AppNavigator = () => {
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="TenantRegistration" component={TenantRegistrationScreen} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
             <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} />
@@ -227,6 +238,15 @@ const AppNavigator = () => {
             <Stack.Screen name="PropertyDetail" component={PropertyDetailScreen} />
             <Stack.Screen name="AddProperty" component={AddPropertyScreen} />
             <Stack.Screen name="EditProperty" component={EditPropertyScreen} />
+            
+            {/* Room Mapping Screens */}
+            <Stack.Screen name="RoomMapping" component={RoomMappingScreen} />
+            <Stack.Screen name="FloorConfiguration" component={FloorConfigurationScreen} />
+            <Stack.Screen name="FloorUnitConfiguration" component={FloorUnitConfigurationScreen} />
+            <Stack.Screen name="RoomMappingComplete" component={RoomMappingCompleteScreen} />
+            
+            {/* Room Management Screen */}
+            <Stack.Screen name="RoomManagement" component={RoomManagementScreen} />
             <Stack.Screen name="TenantDetail" component={TenantDetailScreen} />
             <Stack.Screen name="AddTenant" component={AddTenantScreen} />
             <Stack.Screen name="EditTenant" component={EditTenantScreen} />

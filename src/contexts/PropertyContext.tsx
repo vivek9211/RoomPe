@@ -4,6 +4,8 @@ import { Property } from '../types/property.types';
 interface PropertyContextType {
   selectedProperty: Property | null;
   setSelectedProperty: (property: Property | null) => void;
+  clearSelectedProperty: () => void;
+  isPropertySelected: (propertyId: string) => boolean;
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
@@ -18,6 +20,8 @@ export const PropertyProvider: React.FC<PropertyProviderProps> = ({ children }) 
   const value: PropertyContextType = {
     selectedProperty,
     setSelectedProperty,
+    clearSelectedProperty: () => setSelectedProperty(null),
+    isPropertySelected: (propertyId: string) => selectedProperty?.id === propertyId,
   };
 
   return (

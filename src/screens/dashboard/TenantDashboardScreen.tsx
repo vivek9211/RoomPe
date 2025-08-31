@@ -18,7 +18,7 @@ interface TenantDashboardScreenProps {
 }
 
 const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigation }) => {
-  const { userProfile } = useAuth();
+  const { userProfile, signOut } = useAuth();
   const [currentTime, setCurrentTime] = useState('10:34');
   const [batteryLevel, setBatteryLevel] = useState('47');
 
@@ -68,6 +68,31 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
 
   const handleHelp = () => {
     Alert.alert('Help', 'Contact support at support@roompe.com');
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getMemberSinceDate = () => {
@@ -126,6 +151,13 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
                 <Text style={styles.iconText}>🔔</Text>
               </View>
               <Text style={styles.actionLabel}>Notification</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <View style={styles.logoutIcon}>
+                <Text style={styles.iconText}>🚪</Text>
+              </View>
+              <Text style={styles.actionLabel}>Logout</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -329,6 +361,18 @@ const styles = StyleSheet.create({
   },
   notificationButton: {
     alignItems: 'center',
+  },
+  logoutButton: {
+    alignItems: 'center',
+  },
+  logoutIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.xs,
   },
   notificationIcon: {
     width: 40,

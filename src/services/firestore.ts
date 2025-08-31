@@ -9,6 +9,7 @@ export const COLLECTIONS = {
   PAYMENTS: 'payments',
   MAINTENANCE_REQUESTS: 'maintenance_requests',
   NOTIFICATIONS: 'notifications',
+  ROOM_MAPPINGS: 'room_mappings',
 } as const;
 
 // Firestore service class for all Firestore operations
@@ -16,6 +17,16 @@ class FirestoreService {
   // Users collection
   private get usersCollection() {
     return firestore().collection(COLLECTIONS.USERS);
+  }
+
+  // Properties collection
+  private get propertiesCollection() {
+    return firestore().collection(COLLECTIONS.PROPERTIES);
+  }
+
+  // Room Mappings collection
+  private get roomMappingsCollection() {
+    return firestore().collection(COLLECTIONS.ROOM_MAPPINGS);
   }
 
   // ==================== USER OPERATIONS ====================
@@ -323,6 +334,155 @@ class FirestoreService {
     }
   }
 
+  // ==================== PROPERTY OPERATIONS ====================
+
+  /**
+   * Create a new property in Firestore
+   * @param propertyData - Property data to create
+   * @returns Created property ID
+   */
+  async createProperty(propertyData: any): Promise<string> {
+    try {
+      const propertyDoc = {
+        ...propertyData,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+      
+      console.log('Creating property with data:', propertyDoc);
+      
+      const docRef = await this.propertiesCollection.add(propertyDoc);
+      
+      console.log('Property created successfully with ID:', docRef.id);
+      return docRef.id;
+    } catch (error: any) {
+      console.error('Error creating property:', error);
+      throw new Error(`Failed to create property: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get properties by owner ID
+   * @param ownerId - Owner's user ID
+   * @returns Array of properties owned by the user
+   */
+  async getPropertiesByOwner(ownerId: string): Promise<any[]> {
+    try {
+      const snapshot = await this.propertiesCollection
+        .where('ownerId', '==', ownerId)
+        .get();
+
+      const properties: any[] = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        properties.push({
+          id: doc.id,
+          ...data,
+        });
+      });
+
+      // Sort by createdAt in descending order in JavaScript to avoid index requirement
+      return properties.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error fetching properties by owner:', error);
+      throw new Error('Failed to fetch properties');
+    }
+  }
+
+  /**
+   * Get a single property by ID
+   * @param propertyId - Property ID
+   * @returns Property data or null if not found
+   */
+  async getPropertyById(propertyId: string): Promise<any | null> {
+    try {
+      const doc = await this.propertiesCollection.doc(propertyId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching property by ID:', error);
+      throw new Error('Failed to fetch property');
+    }
+  }
+
+  /**
+   * Update property in Firestore
+   * @param propertyId - Property ID
+   * @param updates - Partial property data to update
+   */
+  async updateProperty(propertyId: string, updates: any): Promise<void> {
+    try {
+      const updateData = {
+        ...updates,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+      
+      await this.propertiesCollection.doc(propertyId).update(updateData);
+    } catch (error) {
+      console.error('Error updating property:', error);
+      throw new Error('Failed to update property');
+    }
+  }
+
+  /**
+   * Delete property from Firestore
+   * @param propertyId - Property ID
+   */
+  async deleteProperty(propertyId: string): Promise<void> {
+    try {
+      await this.propertiesCollection.doc(propertyId).delete();
+    } catch (error) {
+      console.error('Error deleting property:', error);
+      throw new Error('Failed to delete property');
+    }
+  }
+
+  /**
+   * Listen to properties owned by a specific user in real-time
+   * @param ownerId - Owner's user ID
+   * @param callback - Callback function to handle changes
+   * @returns Unsubscribe function
+   */
+  onPropertiesByOwnerChange(ownerId: string, callback: (properties: any[]) => void): () => void {
+    return this.propertiesCollection
+      .where('ownerId', '==', ownerId)
+      .onSnapshot(
+        (snapshot) => {
+          const properties: any[] = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            properties.push({
+              id: doc.id,
+              ...data,
+            });
+          });
+          
+          // Sort by createdAt in descending order in JavaScript to avoid index requirement
+          const sortedProperties = properties.sort((a, b) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+            return bTime - aTime;
+          });
+          
+          callback(sortedProperties);
+        },
+        (error) => {
+          console.error('Error listening to properties changes:', error);
+          callback([]);
+        }
+      );
+  }
+
   // ==================== REAL-TIME LISTENERS ====================
 
   /**
@@ -363,6 +523,102 @@ class FirestoreService {
       },
       (error) => {
         console.error('Error listening to user profile changes:', error);
+        callback(null);
+      }
+    );
+  }
+
+  // ==================== ROOM MAPPING OPERATIONS ====================
+
+  /**
+   * Create or update room mapping for a property
+   * @param propertyId - Property ID
+   * @param roomMappingData - Room mapping data
+   */
+  async createOrUpdateRoomMapping(
+    propertyId: string, 
+    roomMappingData: {
+      totalFloors: number;
+      floorConfigs: any[];
+    }
+  ): Promise<void> {
+    try {
+      const roomMappingDoc = {
+        propertyId,
+        totalFloors: roomMappingData.totalFloors,
+        floorConfigs: roomMappingData.floorConfigs,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+
+      // Use propertyId as the document ID for easy querying
+      await this.roomMappingsCollection.doc(propertyId).set(roomMappingDoc);
+      
+      console.log('Room mapping created/updated successfully for property:', propertyId);
+    } catch (error) {
+      console.error('Error creating/updating room mapping:', error);
+      throw new Error('Failed to create/update room mapping');
+    }
+  }
+
+  /**
+   * Get room mapping for a property
+   * @param propertyId - Property ID
+   * @returns Room mapping data or null if not found
+   */
+  async getRoomMapping(propertyId: string): Promise<any | null> {
+    try {
+      const doc = await this.roomMappingsCollection.doc(propertyId).get();
+      if (doc.exists) {
+        return {
+          id: doc.id,
+          ...doc.data()
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching room mapping:', error);
+      throw new Error('Failed to fetch room mapping');
+    }
+  }
+
+  /**
+   * Delete room mapping for a property
+   * @param propertyId - Property ID
+   */
+  async deleteRoomMapping(propertyId: string): Promise<void> {
+    try {
+      await this.roomMappingsCollection.doc(propertyId).delete();
+      console.log('Room mapping deleted successfully for property:', propertyId);
+    } catch (error) {
+      console.error('Error deleting room mapping:', error);
+      throw new Error('Failed to delete room mapping');
+    }
+  }
+
+  /**
+   * Listen to room mapping changes in real-time
+   * @param propertyId - Property ID
+   * @param callback - Callback function to handle changes
+   * @returns Unsubscribe function
+   */
+  onRoomMappingChange(
+    propertyId: string, 
+    callback: (roomMapping: any | null) => void
+  ): () => void {
+    return this.roomMappingsCollection.doc(propertyId).onSnapshot(
+      (doc) => {
+        if (doc.exists) {
+          callback({
+            id: doc.id,
+            ...doc.data()
+          });
+        } else {
+          callback(null);
+        }
+      },
+      (error) => {
+        console.error('Error listening to room mapping changes:', error);
         callback(null);
       }
     );

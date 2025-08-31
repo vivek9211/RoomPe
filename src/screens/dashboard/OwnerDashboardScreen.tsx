@@ -16,6 +16,7 @@ import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProperty } from '../../contexts/PropertyContext';
 import { Property } from '../../types/property.types';
+import { firestoreService } from '../../services/firestore';
 
 interface OwnerDashboardScreenProps {
   navigation: any;
@@ -23,7 +24,7 @@ interface OwnerDashboardScreenProps {
 }
 
 const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation, route }) => {
-  const { userProfile } = useAuth();
+  const { userProfile, signOut } = useAuth();
   const { selectedProperty, setSelectedProperty } = useProperty();
   const [properties, setProperties] = useState<Property[]>([]);
   
@@ -35,8 +36,44 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
 
 
   useEffect(() => {
-    loadProperties();
-    
+    if (userProfile?.uid) {
+      loadProperties();
+      
+      // Set up real-time listener for properties
+      const unsubscribe = firestoreService.onPropertiesByOwnerChange(
+        userProfile.uid,
+        (firebaseProperties) => {
+          // Convert Firebase data to Property objects
+          const properties: Property[] = firebaseProperties.map((firebaseProperty: any) => ({
+            id: firebaseProperty.id,
+            name: firebaseProperty.name,
+            ownerId: firebaseProperty.ownerId,
+            type: firebaseProperty.type,
+            status: firebaseProperty.status,
+            location: firebaseProperty.location,
+            totalRooms: firebaseProperty.totalRooms,
+            availableRooms: firebaseProperty.availableRooms,
+            createdAt: firebaseProperty.createdAt,
+            updatedAt: firebaseProperty.updatedAt,
+            pricing: firebaseProperty.pricing,
+          }));
+          
+          setProperties(properties);
+          console.log('Properties updated in dashboard real-time:', properties);
+          
+          // Auto-select first property if none is selected
+          if (!selectedProperty && properties.length > 0) {
+            setSelectedProperty(properties[0]);
+          }
+        }
+      );
+      
+      // Cleanup listener on unmount
+      return () => unsubscribe();
+    }
+  }, [userProfile?.uid]);
+
+  useEffect(() => {
     // Start entrance animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -55,36 +92,36 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
 
 
   const loadProperties = async () => {
+    if (!userProfile?.uid) {
+      console.log('No user profile, skipping property load');
+      return;
+    }
+
     try {
-      // Mock data - replace with actual API call
-      const mockProperties: Property[] = [
-        {
-          id: '1',
-          name: 'Sri Sai Balaji Mens PG',
-          ownerId: userProfile?.uid || '',
-          type: 'pg' as any,
-          status: 'active' as any,
-          location: {
-            address: '123 Main Street',
-            city: 'Bangalore',
-            state: 'Karnataka',
-            postalCode: '560001',
-            country: 'India',
-          },
-          totalRooms: 20,
-          availableRooms: 5,
-          createdAt: new Date() as any,
-          updatedAt: new Date() as any,
-          pricing: {
-            baseRent: 8000,
-            deposit: 16000,
-            currency: 'INR',
-          },
-        },
-      ];
-      setProperties(mockProperties);
-      if (!selectedProperty && mockProperties.length > 0) {
-        setSelectedProperty(mockProperties[0]);
+      // Load properties from Firebase for the current user
+      const firebaseProperties = await firestoreService.getPropertiesByOwner(userProfile.uid);
+      
+      // Convert Firebase data to Property objects
+      const properties: Property[] = firebaseProperties.map((firebaseProperty: any) => ({
+        id: firebaseProperty.id,
+        name: firebaseProperty.name,
+        ownerId: firebaseProperty.ownerId,
+        type: firebaseProperty.type,
+        status: firebaseProperty.status,
+        location: firebaseProperty.location,
+        totalRooms: firebaseProperty.totalRooms,
+        availableRooms: firebaseProperty.availableRooms,
+        createdAt: firebaseProperty.createdAt,
+        updatedAt: firebaseProperty.updatedAt,
+        pricing: firebaseProperty.pricing,
+      }));
+      
+      setProperties(properties);
+      console.log('Properties loaded in dashboard:', properties);
+      
+      // Auto-select first property if none is selected
+      if (!selectedProperty && properties.length > 0) {
+        setSelectedProperty(properties[0]);
       }
     } catch (error) {
       console.error('Error loading properties:', error);
@@ -133,6 +170,31 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     return months[new Date().getMonth()];
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
@@ -153,7 +215,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
               <Text style={styles.logoText}>RentOk</Text>
             </View>
             <Text style={styles.propertyName}>
-              {selectedProperty?.name || 'Select Property'}
+              {selectedProperty?.name || 'No Property Selected'}
             </Text>
             <Text style={styles.dropdownIcon}>▼</Text>
           </TouchableOpacity>
@@ -172,6 +234,9 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
             <TouchableOpacity style={styles.helpIcon}>
               <Text style={styles.iconText}>❓</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutIcon} onPress={handleLogout}>
+              <Text style={styles.iconText}>🚪</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -185,6 +250,29 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* No Property Selected Message */}
+        {!selectedProperty && (
+          <View style={styles.noPropertyMessage}>
+            <Text style={styles.noPropertyTitle}>
+              {properties.length === 0 ? 'Welcome to RoomPe!' : 'No Property Selected'}
+            </Text>
+            <Text style={styles.noPropertySubtitle}>
+              {properties.length === 0 
+                ? 'Get started by adding your first property to manage your rental business'
+                : 'Please select a property from the dropdown above to view dashboard information'
+              }
+            </Text>
+            <TouchableOpacity
+              style={styles.selectPropertyButton}
+              onPress={properties.length === 0 ? () => navigation.navigate('AddProperty') : handlePropertySwitch}
+            >
+              <Text style={styles.selectPropertyButtonText}>
+                {properties.length === 0 ? 'Add Your First Property' : 'Select Property'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
         {/* August Summary Section */}
         <View style={styles.summarySection}>
           <View style={styles.summaryHeader}>
@@ -400,7 +488,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
 
       {/* Floating Help Button */}
       <TouchableOpacity style={styles.helpButton} onPress={handleHelp}>
-        <Text style={styles.helpIcon}>💬</Text>
+        <Text style={styles.helpButtonIcon}>💬</Text>
         <Text style={styles.helpText}>Help</Text>
       </TouchableOpacity>
     </SafeAreaView>
@@ -491,6 +579,9 @@ const styles = StyleSheet.create({
     marginRight: dimensions.spacing.sm,
   },
   helpIcon: {
+    marginRight: dimensions.spacing.sm,
+  },
+  logoutIcon: {
     marginRight: dimensions.spacing.sm,
   },
   iconText: {
@@ -672,7 +763,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  helpIcon: {
+  helpButtonIcon: {
     fontSize: 20,
     marginBottom: dimensions.spacing.xs,
   },
@@ -696,6 +787,42 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginHorizontal: 4,
     backgroundColor: colors.textMuted,
+  },
+  noPropertyMessage: {
+    backgroundColor: colors.white,
+    padding: dimensions.spacing.xl,
+    borderRadius: dimensions.borderRadius.md,
+    marginBottom: dimensions.spacing.xl,
+    alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noPropertyTitle: {
+    fontSize: fonts.xl,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.sm,
+  },
+  noPropertySubtitle: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: dimensions.spacing.lg,
+    lineHeight: 22,
+  },
+  selectPropertyButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+  },
+  selectPropertyButtonText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '500',
   },
 });
 
