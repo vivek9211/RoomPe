@@ -201,3 +201,125 @@ export interface RoomAvailability {
   availableUntil?: Timestamp;
   reason?: string; // Why room is unavailable
 }
+
+// Room sharing types
+export enum RoomSharingType {
+  SINGLE = 'single',
+  DOUBLE = 'double',
+  TRIPLE = 'triple',
+  FOUR_SHARING = 'four_sharing',
+  FIVE_SHARING = 'five_sharing',
+  SIX_SHARING = 'six_sharing',
+  SEVEN_SHARING = 'seven_sharing',
+  EIGHT_SHARING = 'eight_sharing',
+  NINE_SHARING = 'nine_sharing',
+}
+
+// Unit types
+export enum UnitType {
+  ROOM = 'room',
+  RK = 'rk',
+  BHK = 'bhk',
+  STUDIO_APARTMENT = 'studio_apartment',
+}
+
+// Floor interface
+export interface Floor {
+  id: string;
+  floorNumber: number;
+  floorName: string; // e.g., "Ground Floor", "1st Floor"
+  totalUnits: number;
+  filledUnits: number;
+  vacantUnits: number;
+  units: Unit[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Unit interface
+export interface Unit {
+  id: string;
+  floorId: string;
+  unitNumber: string; // e.g., "101", "A1"
+  unitType: UnitType;
+  sharingType?: RoomSharingType; // Only for rooms
+  capacity: number; // Number of people it can accommodate
+  isOccupied: boolean;
+  tenantIds: string[];
+  rent: number;
+  deposit: number;
+  amenities: string[];
+  status: 'available' | 'occupied' | 'maintenance' | 'reserved';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Room configuration for a floor
+export interface FloorRoomConfig {
+  floorId: string;
+  floorName: string;
+  roomConfigs: {
+    [key in RoomSharingType]: number; // Count of rooms for each sharing type
+  };
+  unitConfigs: {
+    [key in UnitType]: number; // Count of units for each unit type
+  };
+}
+
+// Property room mapping
+export interface PropertyRoomMapping {
+  propertyId: string;
+  totalFloors: number;
+  floors: Floor[];
+  totalUnits: number;
+  occupiedUnits: number;
+  vacantUnits: number;
+  occupancyRate: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Room mapping creation data
+export interface CreateRoomMappingData {
+  propertyId: string;
+  totalFloors: number;
+  floorConfigs: FloorRoomConfig[];
+}
+
+// Floor creation data
+export interface CreateFloorData {
+  propertyId: string;
+  floorNumber: number;
+  floorName: string;
+  roomConfigs: Partial<Record<RoomSharingType, number>>;
+  unitConfigs: Partial<Record<UnitType, number>>;
+}
+
+// Unit creation data
+export interface CreateUnitData {
+  floorId: string;
+  unitNumber: string;
+  unitType: UnitType;
+  sharingType?: RoomSharingType;
+  capacity: number;
+  rent: number;
+  deposit: number;
+  amenities?: string[];
+}
+
+// Room mapping statistics
+export interface RoomMappingStats {
+  totalFloors: number;
+  totalUnits: number;
+  occupiedUnits: number;
+  vacantUnits: number;
+  occupancyRate: number;
+  revenue: number;
+  averageRent: number;
+  floorBreakdown: {
+    floorName: string;
+    totalUnits: number;
+    occupiedUnits: number;
+    vacantUnits: number;
+  }[];
+}

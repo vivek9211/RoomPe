@@ -113,6 +113,10 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
     navigation.navigate('EditProperty', { property });
   };
 
+  const handleRoomMapping = (property: Property) => {
+    navigation.navigate('RoomMapping', { property });
+  };
+
   const handleDeleteProperty = (property: Property) => {
     Alert.alert(
       'Delete Property',
@@ -197,6 +201,12 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           onPress={() => handleEditProperty(property)}
         >
           <Text style={styles.actionButtonText}>✏️ Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => handleRoomMapping(property)}
+        >
+          <Text style={styles.actionButtonText}>🏠 Room Mapping</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.actionButton, styles.deleteButton]}
@@ -485,14 +495,14 @@ const styles = StyleSheet.create({
     paddingTop: dimensions.spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.lightGray,
+    gap: dimensions.spacing.sm,
   },
   actionButton: {
     flex: 1,
     backgroundColor: colors.primary,
     paddingVertical: dimensions.spacing.sm,
     paddingHorizontal: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.sm,
-    marginHorizontal: dimensions.spacing.xs,
+    borderRadius: dimensions.borderRadius.md,
     alignItems: 'center',
   },
   deleteButton: {
