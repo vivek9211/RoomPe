@@ -116,6 +116,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     navigation.navigate('Register');
   };
 
+  const handleRegisterAsTenant = () => {
+    navigation.navigate('TenantRegistration');
+  };
+
   const handleBack = () => {
     navigation.goBack();
   };
@@ -205,6 +209,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               style={styles.googleButton}
             />
           </View>
+
+          {/* Register as Tenant Button */}
+          <TouchableOpacity style={styles.registerAsTenantButton} onPress={handleRegisterAsTenant}>
+            <Text style={styles.registerAsTenantButtonText}>Register as Tenant</Text>
+          </TouchableOpacity>
 
           {/* Register Link */}
           <View style={styles.registerContainer}>
@@ -310,6 +319,19 @@ const styles = StyleSheet.create({
     fontSize: fonts.md,
     color: colors.primary,
     fontWeight: '600' as const,
+  },
+  registerAsTenantButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.lg,
+  },
+  registerAsTenantButtonText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '600',
   },
 });
 

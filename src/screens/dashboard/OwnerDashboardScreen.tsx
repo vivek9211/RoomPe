@@ -24,7 +24,7 @@ interface OwnerDashboardScreenProps {
 }
 
 const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation, route }) => {
-  const { userProfile } = useAuth();
+  const { userProfile, signOut } = useAuth();
   const { selectedProperty, setSelectedProperty } = useProperty();
   const [properties, setProperties] = useState<Property[]>([]);
   
@@ -170,6 +170,31 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     return months[new Date().getMonth()];
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
@@ -208,6 +233,9 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
             </TouchableOpacity>
             <TouchableOpacity style={styles.helpIcon}>
               <Text style={styles.iconText}>❓</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutIcon} onPress={handleLogout}>
+              <Text style={styles.iconText}>🚪</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -460,7 +488,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
 
       {/* Floating Help Button */}
       <TouchableOpacity style={styles.helpButton} onPress={handleHelp}>
-        <Text style={styles.helpIcon}>💬</Text>
+        <Text style={styles.helpButtonIcon}>💬</Text>
         <Text style={styles.helpText}>Help</Text>
       </TouchableOpacity>
     </SafeAreaView>
@@ -551,6 +579,9 @@ const styles = StyleSheet.create({
     marginRight: dimensions.spacing.sm,
   },
   helpIcon: {
+    marginRight: dimensions.spacing.sm,
+  },
+  logoutIcon: {
     marginRight: dimensions.spacing.sm,
   },
   iconText: {
@@ -732,7 +763,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  helpIcon: {
+  helpButtonIcon: {
     fontSize: 20,
     marginBottom: dimensions.spacing.xs,
   },

@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import TenantRegistrationScreen from '../screens/auth/TenantRegistrationScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
@@ -218,6 +219,7 @@ const AppNavigator = () => {
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="TenantRegistration" component={TenantRegistrationScreen} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
             <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} />
