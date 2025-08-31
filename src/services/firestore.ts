@@ -18,6 +18,11 @@ class FirestoreService {
     return firestore().collection(COLLECTIONS.USERS);
   }
 
+  // Properties collection
+  private get propertiesCollection() {
+    return firestore().collection(COLLECTIONS.PROPERTIES);
+  }
+
   // ==================== USER OPERATIONS ====================
 
   /**
@@ -321,6 +326,155 @@ class FirestoreService {
       console.error('Error updating phone verification:', error);
       throw new Error('Failed to update phone verification status');
     }
+  }
+
+  // ==================== PROPERTY OPERATIONS ====================
+
+  /**
+   * Create a new property in Firestore
+   * @param propertyData - Property data to create
+   * @returns Created property ID
+   */
+  async createProperty(propertyData: any): Promise<string> {
+    try {
+      const propertyDoc = {
+        ...propertyData,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+      
+      console.log('Creating property with data:', propertyDoc);
+      
+      const docRef = await this.propertiesCollection.add(propertyDoc);
+      
+      console.log('Property created successfully with ID:', docRef.id);
+      return docRef.id;
+    } catch (error: any) {
+      console.error('Error creating property:', error);
+      throw new Error(`Failed to create property: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get properties by owner ID
+   * @param ownerId - Owner's user ID
+   * @returns Array of properties owned by the user
+   */
+  async getPropertiesByOwner(ownerId: string): Promise<any[]> {
+    try {
+      const snapshot = await this.propertiesCollection
+        .where('ownerId', '==', ownerId)
+        .get();
+
+      const properties: any[] = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        properties.push({
+          id: doc.id,
+          ...data,
+        });
+      });
+
+      // Sort by createdAt in descending order in JavaScript to avoid index requirement
+      return properties.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error fetching properties by owner:', error);
+      throw new Error('Failed to fetch properties');
+    }
+  }
+
+  /**
+   * Get a single property by ID
+   * @param propertyId - Property ID
+   * @returns Property data or null if not found
+   */
+  async getPropertyById(propertyId: string): Promise<any | null> {
+    try {
+      const doc = await this.propertiesCollection.doc(propertyId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching property by ID:', error);
+      throw new Error('Failed to fetch property');
+    }
+  }
+
+  /**
+   * Update property in Firestore
+   * @param propertyId - Property ID
+   * @param updates - Partial property data to update
+   */
+  async updateProperty(propertyId: string, updates: any): Promise<void> {
+    try {
+      const updateData = {
+        ...updates,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+      
+      await this.propertiesCollection.doc(propertyId).update(updateData);
+    } catch (error) {
+      console.error('Error updating property:', error);
+      throw new Error('Failed to update property');
+    }
+  }
+
+  /**
+   * Delete property from Firestore
+   * @param propertyId - Property ID
+   */
+  async deleteProperty(propertyId: string): Promise<void> {
+    try {
+      await this.propertiesCollection.doc(propertyId).delete();
+    } catch (error) {
+      console.error('Error deleting property:', error);
+      throw new Error('Failed to delete property');
+    }
+  }
+
+  /**
+   * Listen to properties owned by a specific user in real-time
+   * @param ownerId - Owner's user ID
+   * @param callback - Callback function to handle changes
+   * @returns Unsubscribe function
+   */
+  onPropertiesByOwnerChange(ownerId: string, callback: (properties: any[]) => void): () => void {
+    return this.propertiesCollection
+      .where('ownerId', '==', ownerId)
+      .onSnapshot(
+        (snapshot) => {
+          const properties: any[] = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            properties.push({
+              id: doc.id,
+              ...data,
+            });
+          });
+          
+          // Sort by createdAt in descending order in JavaScript to avoid index requirement
+          const sortedProperties = properties.sort((a, b) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+            return bTime - aTime;
+          });
+          
+          callback(sortedProperties);
+        },
+        (error) => {
+          console.error('Error listening to properties changes:', error);
+          callback([]);
+        }
+      );
   }
 
   // ==================== REAL-TIME LISTENERS ====================
