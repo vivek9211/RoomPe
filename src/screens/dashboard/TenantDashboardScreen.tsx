@@ -34,13 +34,18 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
 
   // Fetch assigned property on component mount and set up real-time listener
   useEffect(() => {
+    console.log('TenantDashboard useEffect triggered');
+    console.log('userProfile:', userProfile);
+    
     if (userProfile?.uid) {
+      console.log('User profile found, loading assigned property');
       loadAssignedProperty();
       
       // Set up real-time listener for tenant applications
       const unsubscribe = firestoreService.onTenantApplicationsByTenantChange(
         userProfile.uid,
         async (applications) => {
+          console.log('Real-time applications update:', applications);
           // Find the approved application
           const approvedApplication = applications.find(
             (app: TenantApplication) => app.status === TenantApplicationStatus.APPROVED
@@ -63,6 +68,8 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
       );
       
       return () => unsubscribe();
+    } else {
+      console.log('No user profile found');
     }
   }, [userProfile?.uid]);
 
@@ -71,25 +78,32 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
 
     try {
       setLoadingProperty(true);
+      console.log('Loading assigned property for user:', userProfile.uid);
       
       // Get all tenant applications for this user
       const applications = await firestoreService.getTenantApplicationsByTenant(userProfile.uid);
+      console.log('Found applications:', applications);
       
       // Find the approved application
       const approvedApplication = applications.find(
         (app: TenantApplication) => app.status === TenantApplicationStatus.APPROVED
       );
+      console.log('Approved application:', approvedApplication);
 
       if (approvedApplication) {
         // Fetch the property details
         const property = await firestoreService.getPropertyById(approvedApplication.propertyId);
+        console.log('Property details:', property);
         
         if (property) {
           setAssignedProperty({
             application: approvedApplication,
             property: property,
           });
+          console.log('Assigned property set successfully');
         }
+      } else {
+        console.log('No approved application found');
       }
     } catch (error) {
       console.error('Error loading assigned property:', error);
@@ -122,13 +136,29 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     Alert.alert('Notifications', 'View your notifications');
   };
 
+
+
   const handleHelp = () => {
     Alert.alert('Help', 'Contact support at support@roompe.com');
   };
 
   const handleViewPropertyDetails = () => {
+    console.log('handleViewPropertyDetails called');
+    console.log('assignedProperty:', assignedProperty);
+    
     if (assignedProperty) {
-      navigation.navigate('PropertyDetail', { property: assignedProperty.property });
+      console.log('Navigating to AssignedPropertyDetail with:', {
+        property: assignedProperty.property,
+        application: assignedProperty.application
+      });
+      
+      navigation.navigate('AssignedPropertyDetail', { 
+        property: assignedProperty.property,
+        application: assignedProperty.application 
+      });
+    } else {
+      console.log('No assigned property found');
+      Alert.alert('No Property', 'You don\'t have an assigned property yet.');
     }
   };
 
@@ -185,11 +215,11 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
           </View>
         </View>
         
-        <View style={styles.actionIcons}>
-          <TouchableOpacity style={styles.notificationIcon} onPress={handleNotifications}>
-            <Text style={styles.iconText}>🔔</Text>
-          </TouchableOpacity>
-        </View>
+                 <View style={styles.actionIcons}>
+           <TouchableOpacity style={styles.notificationIcon} onPress={handleNotifications}>
+             <Text style={styles.iconText}>🔔</Text>
+           </TouchableOpacity>
+         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -204,7 +234,11 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
           <View style={styles.assignedPropertySection}>
             <Text style={styles.sectionTitle}>Your Assigned Property</Text>
             
-            <TouchableOpacity style={styles.propertyCard} onPress={handleViewPropertyDetails}>
+                         <TouchableOpacity 
+               style={styles.propertyCard} 
+               onPress={handleViewPropertyDetails}
+               activeOpacity={0.7}
+             >
               <View style={styles.propertyHeader}>
                 <Text style={styles.propertyName}>{assignedProperty.property.name}</Text>
                 <View style={styles.statusBadge}>
@@ -240,11 +274,15 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
                 )}
               </View>
               
-              <View style={styles.propertyActions}>
-                <TouchableOpacity style={styles.viewDetailsButton}>
-                  <Text style={styles.viewDetailsText}>View Details</Text>
-                </TouchableOpacity>
-              </View>
+                             <View style={styles.propertyActions}>
+                 <TouchableOpacity 
+                   style={styles.viewDetailsButton}
+                   onPress={handleViewPropertyDetails}
+                   activeOpacity={0.7}
+                 >
+                   <Text style={styles.viewDetailsText}>View Details</Text>
+                 </TouchableOpacity>
+               </View>
             </TouchableOpacity>
           </View>
         ) : (

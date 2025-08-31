@@ -27,6 +27,7 @@ import PropertySelectionScreen from '../screens/dashboard/PropertySelectionScree
 // Property Screens
 import PropertyListScreen from '../screens/properties/PropertyListScreen';
 import PropertyDetailScreen from '../screens/properties/PropertyDetailScreen';
+import AssignedPropertyDetailScreen from '../screens/properties/AssignedPropertyDetailScreen';
 import AddPropertyScreen from '../screens/properties/AddPropertyScreen';
 import EditPropertyScreen from '../screens/properties/EditPropertyScreen';
 
@@ -274,6 +275,7 @@ const AppNavigator = () => {
           // Tenant Stack - User has tenant role, show tenant dashboard
           <>
             <Stack.Screen name="TenantTabs" component={TenantTabNavigator} />
+            <Stack.Screen name="AssignedPropertyDetail" component={AssignedPropertyDetailScreen} />
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
