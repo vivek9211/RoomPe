@@ -65,6 +65,7 @@ import FinancialReportScreen from '../screens/reports/FinancialReportScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import ProfileScreen from '../screens/settings/ProfileScreen';
 import TenantSettingsScreen from '../screens/settings/TenantSettingsScreen';
+import OwnerSettingsScreen from '../screens/settings/OwnerSettingsScreen';
 import AssignPropertyScreen from '../screens/settings/AssignPropertyScreen';
 import NotificationSettingsScreen from '../screens/settings/NotificationSettingsScreen';
 
@@ -139,6 +140,16 @@ const OwnerTabNavigator = () => {
           tabBarLabel: 'Analytics',
           tabBarIcon: ({ color, size }) => (
             <Text style={{ color, fontSize: size }}>📊</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={OwnerSettingsScreen}
+        options={{
+          tabBarLabel: 'Settings',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ color, fontSize: size }}>⚙️</Text>
           ),
         }}
       />

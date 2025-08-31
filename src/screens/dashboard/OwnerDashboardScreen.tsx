@@ -161,9 +161,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     navigation.navigate('Reports');
   };
 
-  const handleHelp = () => {
-    Alert.alert('Help', 'Contact support at support@roompe.com');
-  };
+
 
   const getCurrentMonth = () => {
     const months = [
@@ -173,76 +171,34 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     return months[new Date().getMonth()];
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={colors.primary}
-        translucent={false}
-      />
-      
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <View style={styles.timeContainer}>
-          <Text style={styles.timeText}>10:16</Text>
-        </View>
-        
-        <View style={styles.propertySelector}>
-          <TouchableOpacity style={styles.propertyButton} onPress={handlePropertySwitch}>
-            <View style={styles.logoContainer}>
-              <Text style={styles.logoText}>RentOk</Text>
-            </View>
-            <Text style={styles.propertyName}>
-              {selectedProperty?.name || 'No Property Selected'}
-            </Text>
-            <Text style={styles.dropdownIcon}>▼</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.statusIcons}>
-          <View style={styles.statusIconRow}>
-            <Text style={styles.signalIcon}>📶</Text>
-            <Text style={styles.wifiIcon}>📶</Text>
-            <Text style={styles.batteryIcon}>🔋</Text>
-          </View>
-          <View style={styles.actionIcons}>
-            <TouchableOpacity style={styles.notificationIcon}>
-              <Text style={styles.iconText}>🔔</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.helpIcon}>
-              <Text style={styles.iconText}>❓</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.logoutIcon} onPress={handleLogout}>
-              <Text style={styles.iconText}>🚪</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+     return (
+     <SafeAreaView style={styles.container}>
+       <StatusBar
+         barStyle="light-content"
+         backgroundColor={colors.primary}
+         translucent={true}
+       />
+       
+       {/* Top Bar */}
+       <View style={styles.topBar}>
+         <View style={styles.propertySelector}>
+           <TouchableOpacity style={styles.propertyButton} onPress={handlePropertySwitch}>
+             <View style={styles.logoContainer}>
+               <Text style={styles.logoText}>RentOk</Text>
+             </View>
+             <Text style={styles.propertyName}>
+               {selectedProperty?.name || 'No Property Selected'}
+             </Text>
+             <Text style={styles.dropdownIcon}>▼</Text>
+           </TouchableOpacity>
+         </View>
+         
+         <View style={styles.actionIcons}>
+           <TouchableOpacity style={styles.notificationIcon}>
+             <Text style={styles.iconText}>🔔</Text>
+           </TouchableOpacity>
+         </View>
+       </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -510,11 +466,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
         </View>
       </ScrollView>
 
-      {/* Floating Help Button */}
-      <TouchableOpacity style={styles.helpButton} onPress={handleHelp}>
-        <Text style={styles.helpButtonIcon}>💬</Text>
-        <Text style={styles.helpText}>Help</Text>
-      </TouchableOpacity>
+
     </SafeAreaView>
   );
 };
@@ -524,90 +476,70 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  topBar: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    height: 80,
-  },
-  timeContainer: {
-    alignItems: 'flex-start',
-  },
-  timeText: {
-    fontSize: fonts.md,
-    color: colors.white,
-    fontWeight: '500',
-  },
+     topBar: {
+     backgroundColor: colors.primary,
+     flexDirection: 'row',
+     alignItems: 'center',
+     justifyContent: 'space-between',
+     paddingHorizontal: dimensions.spacing.lg,
+     paddingTop: dimensions.spacing.xl,
+     paddingBottom: dimensions.spacing.md,
+     minHeight: 100,
+   },
+
   propertySelector: {
     flex: 1,
     alignItems: 'center',
   },
-  propertyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.lg,
-  },
-  logoContainer: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: dimensions.spacing.sm,
-  },
+     propertyButton: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     backgroundColor: 'rgba(255, 255, 255, 0.15)',
+     paddingHorizontal: dimensions.spacing.lg,
+     paddingVertical: dimensions.spacing.md,
+     borderRadius: dimensions.borderRadius.xl,
+   },
+     logoContainer: {
+     backgroundColor: colors.white,
+     borderRadius: 16,
+     width: 32,
+     height: 32,
+     justifyContent: 'center',
+     alignItems: 'center',
+     marginRight: dimensions.spacing.md,
+   },
   logoText: {
     fontSize: fonts.sm,
     fontWeight: 'bold',
     color: colors.primary,
   },
   propertyName: {
-    fontSize: fonts.md,
+    fontSize: fonts.lg,
     color: colors.white,
-    fontWeight: '500',
-    marginRight: dimensions.spacing.sm,
-    maxWidth: 120,
+    fontWeight: '600',
+    marginRight: dimensions.spacing.md,
+    maxWidth: 140,
+    textAlign: 'center',
   },
   dropdownIcon: {
-    fontSize: fonts.sm,
+    fontSize: fonts.md,
     color: colors.white,
+    fontWeight: 'bold',
   },
-  statusIcons: {
-    alignItems: 'flex-end',
-  },
-  statusIconRow: {
-    flexDirection: 'row',
-    marginBottom: dimensions.spacing.xs,
-  },
-  signalIcon: {
-    fontSize: 16,
-    marginRight: dimensions.spacing.xs,
-  },
-  wifiIcon: {
-    fontSize: 16,
-    marginRight: dimensions.spacing.xs,
-  },
-  batteryIcon: {
-    fontSize: 16,
-  },
+
   actionIcons: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
-  notificationIcon: {
-    marginRight: dimensions.spacing.sm,
-  },
-  helpIcon: {
-    marginRight: dimensions.spacing.sm,
-  },
-  logoutIcon: {
-    marginRight: dimensions.spacing.sm,
-  },
+     notificationIcon: {
+     backgroundColor: 'rgba(255, 255, 255, 0.15)',
+     borderRadius: 18,
+     width: 36,
+     height: 36,
+     justifyContent: 'center',
+     alignItems: 'center',
+   },
+
   iconText: {
     fontSize: 20,
   },
@@ -615,19 +547,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
   },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
-    paddingHorizontal: dimensions.spacing.md,
-    height: 48,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
+     searchBar: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     backgroundColor: colors.white,
+     borderRadius: dimensions.borderRadius.lg,
+     paddingHorizontal: dimensions.spacing.md,
+     height: 44,
+   },
   searchIcon: {
     fontSize: 20,
     marginRight: dimensions.spacing.sm,
@@ -655,19 +582,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  propertiesDropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
+     propertiesDropdown: {
+     flexDirection: 'row',
+     alignItems: 'center',
+     backgroundColor: colors.white,
+     paddingHorizontal: dimensions.spacing.md,
+     paddingVertical: dimensions.spacing.sm,
+     borderRadius: dimensions.borderRadius.lg,
+   },
   propertiesText: {
     fontSize: fonts.md,
     color: colors.textPrimary,
@@ -677,19 +599,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: colors.white,
-    padding: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.md,
-    marginHorizontal: dimensions.spacing.xs,
-    alignItems: 'center',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
+     summaryCard: {
+     flex: 1,
+     backgroundColor: colors.white,
+     padding: dimensions.spacing.md,
+     borderRadius: dimensions.borderRadius.lg,
+     marginHorizontal: dimensions.spacing.xs,
+     alignItems: 'center',
+   },
   summaryAmount: {
     fontSize: fonts.xl,
     fontWeight: 'bold',
@@ -718,20 +635,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.sm,
   },
-  quickActionButton: {
-    width: 80,
-    minWidth: 80,
-    backgroundColor: colors.white,
-    padding: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.md,
-    alignItems: 'center',
-    marginRight: dimensions.spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
+     quickActionButton: {
+     width: 80,
+     minWidth: 80,
+     backgroundColor: colors.white,
+     padding: dimensions.spacing.md,
+     borderRadius: dimensions.borderRadius.lg,
+     alignItems: 'center',
+     marginRight: dimensions.spacing.md,
+   },
   actionIcon: {
     fontSize: 24,
     marginBottom: dimensions.spacing.xs,
@@ -744,13 +656,11 @@ const styles = StyleSheet.create({
   reportsSection: {
     marginBottom: dimensions.spacing.xl,
   },
-  reportCard: {
-    backgroundColor: colors.success + '20',
-    padding: dimensions.spacing.lg,
-    borderRadius: dimensions.borderRadius.md,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.success,
-  },
+     reportCard: {
+     backgroundColor: 'rgba(76, 175, 80, 0.1)',
+     padding: dimensions.spacing.lg,
+     borderRadius: dimensions.borderRadius.lg,
+   },
   reportTitle: {
     fontSize: fonts.lg,
     fontWeight: '600',
@@ -812,18 +722,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     backgroundColor: colors.textMuted,
   },
-  noPropertyMessage: {
-    backgroundColor: colors.white,
-    padding: dimensions.spacing.xl,
-    borderRadius: dimensions.borderRadius.md,
-    marginBottom: dimensions.spacing.xl,
-    alignItems: 'center',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
+     noPropertyMessage: {
+     backgroundColor: colors.white,
+     padding: dimensions.spacing.xl,
+     borderRadius: dimensions.borderRadius.lg,
+     marginBottom: dimensions.spacing.xl,
+     alignItems: 'center',
+   },
   noPropertyTitle: {
     fontSize: fonts.xl,
     fontWeight: '600',
@@ -837,12 +742,12 @@ const styles = StyleSheet.create({
     marginBottom: dimensions.spacing.lg,
     lineHeight: 22,
   },
-  selectPropertyButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.md,
-  },
+     selectPropertyButton: {
+     backgroundColor: colors.primary,
+     paddingHorizontal: dimensions.spacing.lg,
+     paddingVertical: dimensions.spacing.md,
+     borderRadius: dimensions.borderRadius.lg,
+   },
   selectPropertyButtonText: {
     color: colors.white,
     fontSize: fonts.md,
