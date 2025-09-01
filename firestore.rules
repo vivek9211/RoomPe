@@ -16,43 +16,38 @@ service cloud.firestore {
              resource.data.userId == request.auth.uid;
     }
     
-    // Allow users to access their own document in the "users" collection
+    // Users collection rules
     match /users/{userId} {
+      // Allow users to access their own document
       allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Allow users to list users by role (for tenant selection)
-    match /users/{userId} {
-      allow list: if request.auth != null && 
-        (resource.data.role == 'tenant' || resource.data.role == 'owner');
-    }
-
-    // Allow users to create their own profile document (for onboarding)
-    match /users/{userId} {
+      
+      // Allow users to create their own profile document (for onboarding)
       allow create: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Allow property owners to read tenant user profiles for properties they own
-    match /users/{userId} {
+      
+      // Allow property owners to read tenant user profiles for tenant selection
       allow read: if request.auth != null && 
         resource.data.role == 'tenant';
+      
+      // Allow listing users by role (for tenant selection)
+      allow list: if request.auth != null;
+      
+      // Allow reading individual user documents for tenant selection
+      allow get: if request.auth != null;
     }
 
-    // Allow users to manage properties they own
+    // Properties collection rules
     match /properties/{propertyId} {
+      // Allow users to manage properties they own
       allow read, write: if request.auth != null && 
         (resource == null || resource.data.ownerId == request.auth.uid);
-    }
-
-    // Allow users to read properties they own (for listing)
-    match /properties/{propertyId} {
-      allow read: if request.auth != null && 
-        resource.data.ownerId == request.auth.uid;
-    }
-
-    // Allow all authenticated users to read active properties (for tenant browsing)
-    match /properties/{propertyId} {
+      
+      // Allow all authenticated users to read active properties (for tenant browsing)
       allow read: if request.auth != null && resource.data.status == 'active';
+      
+      // Allow tenants to read properties they're renting
+      allow read: if request.auth != null && 
+        (resource.data.ownerId == request.auth.uid ||
+         request.auth.uid in resource.data.tenantIds);
     }
 
     // Allow users to manage room mappings for properties they own
@@ -61,37 +56,65 @@ service cloud.firestore {
         (resource == null || userOwnsProperty(propertyId));
     }
 
-    // Allow users to manage tenants for properties they own
+    // Tenants collection rules
     match /tenants/{tenantId} {
+      // Allow users to manage tenants for properties they own
       allow read, write: if request.auth != null && 
         (resource == null || userOwnsProperty(resource.data.propertyId));
-    }
-
-    // Allow users to list tenants for properties they own
-    match /tenants/{tenantId} {
+      
+      // Allow users to list tenants for properties they own
       allow list: if request.auth != null && 
         (request.query.propertyId != null && userOwnsProperty(request.query.propertyId));
+      
+      // Allow listing all tenants for tenant management
+      allow list: if request.auth != null;
+      
+      // Allow tenants to read their own tenant records
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
     }
 
-    // Allow users to manage rentals for properties they own
+    // Rentals collection rules
     match /rentals/{rentalId} {
+      // Allow users to manage rentals for properties they own
       allow read, write: if request.auth != null && 
         (resource == null || userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to read their own rental agreements
+      allow read: if request.auth != null && 
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
     }
 
-    // Allow users to manage payments for properties they own
+    // Payments collection rules
     match /payments/{paymentId} {
+      // Allow users to manage payments for properties they own
       allow read, write: if request.auth != null && 
         (resource == null || userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to read their own payments
+      allow read: if request.auth != null && 
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
     }
 
-    // Allow users to manage maintenance requests for properties they own
+    // Maintenance requests collection rules
     match /maintenance_requests/{requestId} {
+      // Allow users to manage maintenance requests for properties they own
       allow read, write: if request.auth != null && 
         (resource == null || userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to create and read their own maintenance requests
+      allow create: if request.auth != null && 
+        request.resource.data.tenantId == request.auth.uid;
+      
+      allow read, update: if request.auth != null && 
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
     }
 
-    // Allow users to manage notifications for properties they own
+    // Notifications collection rules
     match /notifications/{notificationId} {
       allow read, write: if request.auth != null && 
         (resource == null || userOwnsProperty(resource.data.propertyId));
@@ -123,59 +146,16 @@ service cloud.firestore {
         resource.data.tenantId == request.auth.uid &&
         request.resource.data.status in ['withdrawn'];
       
-      // FIXED: Allow listing with proper filters
-      allow list: if request.auth != null && 
-        // For owners: allow listing if they own any applications
-        (resource.data.ownerId == request.auth.uid) ||
-        // For tenants: allow listing their own applications
-        (resource.data.tenantId == request.auth.uid) ||
-        // Allow listing when no specific filters are applied (for testing/initial access)
-        (request.query.limit != null);
+      // Allow listing for authenticated users (simplified for now)
+      allow list: if request.auth != null;
     }
 
-    // Allow listing applications by tenantId for property owners (to edit tenants)
-    // This is more permissive but necessary for property management
-    allow list: if request.auth != null && 
-      request.query.filters[0].op == '==' &&
-      request.query.filters[0].fieldPath == 'tenantId';
 
-    // Optional: Add rules for tenant-specific access
-    // Tenants can read properties they're renting
-    match /properties/{propertyId} {
-      allow read: if request.auth != null && 
-        (resource.data.ownerId == request.auth.uid ||
-         request.auth.uid in resource.data.tenantIds);
-    }
 
-    // Tenants can read their own tenant records
-    match /tenants/{tenantId} {
-      allow read: if request.auth != null && 
-        (resource.data.userId == request.auth.uid ||
-         userOwnsProperty(resource.data.propertyId));
-    }
 
-    // Tenants can read their own rental agreements
-    match /rentals/{rentalId} {
-      allow read: if request.auth != null && 
-        (resource.data.tenantId == request.auth.uid ||
-         userOwnsProperty(resource.data.propertyId));
-    }
 
-    // Tenants can read their own payments
-    match /payments/{paymentId} {
-      allow read: if request.auth != null && 
-        (resource.data.tenantId == request.auth.uid ||
-         userOwnsProperty(resource.data.propertyId));
-    }
 
-    // Tenants can create and read their own maintenance requests
-    match /maintenance_requests/{requestId} {
-      allow create: if request.auth != null && 
-        request.resource.data.tenantId == request.auth.uid;
-      
-      allow read, update: if request.auth != null && 
-        (resource.data.tenantId == request.auth.uid ||
-         userOwnsProperty(resource.data.propertyId));
-    }
+
+
   }
 }

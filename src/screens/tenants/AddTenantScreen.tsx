@@ -10,8 +10,10 @@ import {
   Alert,
   StatusBar,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+
 import { colors, fonts, dimensions } from '../../constants';
 import { CreateTenantData, TenantStatus } from '../../types/tenant.types';
 import { useTenants } from '../../hooks/useTenants';
@@ -34,7 +36,12 @@ const AddTenantScreen: React.FC = () => {
   });
 
   const [agreementStart, setAgreementStart] = useState<Date>(new Date());
-  const [agreementEnd, setAgreementEnd] = useState<Date>(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)); // 1 year from now
+  const [agreementEnd, setAgreementEnd] = useState<Date>(() => {
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setFullYear(endDate.getFullYear() + 1);
+    return endDate;
+  });
 
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [availableProperties, setAvailableProperties] = useState<any[]>([]);
@@ -47,6 +54,8 @@ const AddTenantScreen: React.FC = () => {
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
   const [showRoomPicker, setShowRoomPicker] = useState(false);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
   useEffect(() => {
     loadAvailableUsers();
@@ -61,8 +70,13 @@ const AddTenantScreen: React.FC = () => {
 
   const loadAvailableUsers = async () => {
     try {
-      // Get users with tenant role who are not already assigned to a property
-      const users = await firestoreService.getUsersByRole(UserRole.TENANT);
+      if (!user) {
+        setAvailableUsers([]);
+        return;
+      }
+      
+      // Get tenants with approved applications who are not assigned to any room
+      const users = await firestoreService.getAvailableTenantsWithApprovedApplications(user.uid);
       setAvailableUsers(users);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -198,6 +212,37 @@ const AddTenantScreen: React.FC = () => {
     return date.toLocaleDateString();
   };
 
+  const showDatePicker = (isStartDate: boolean) => {
+    if (isStartDate) {
+      setShowStartDatePicker(true);
+    } else {
+      setShowEndDatePicker(true);
+    }
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date, isStartDate: boolean = true) => {
+    if (event.type === 'set' && selectedDate) {
+      if (isStartDate) {
+        setAgreementStart(selectedDate);
+        // If end date is before new start date, update end date to be 1 year after start date
+        if (agreementEnd <= selectedDate) {
+          const newEndDate = new Date(selectedDate);
+          newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+          setAgreementEnd(newEndDate);
+        }
+      } else {
+        setAgreementEnd(selectedDate);
+      }
+    }
+    
+    // Hide the picker
+    if (isStartDate) {
+      setShowStartDatePicker(false);
+    } else {
+      setShowEndDatePicker(false);
+    }
+  };
+
   const renderPickerModal = (title: string, data: any[], onSelect: (item: any) => void, visible: boolean, onClose: () => void) => {
     if (!visible) return null;
 
@@ -214,12 +259,12 @@ const AddTenantScreen: React.FC = () => {
             {data.length === 0 ? (
               <View style={styles.emptyModalItem}>
                 <Text style={styles.emptyModalText}>
-                  {title === 'Select User' 
-                    ? 'No tenant users available. Users need to register with the tenant role first.'
+                  {title === 'Select Approved Tenant' 
+                    ? 'No approved tenants available. Only tenants with approved applications and no room assignments are shown.'
                     : 'No items available'
                   }
                 </Text>
-                {title === 'Select User' && (
+                {title === 'Select Approved Tenant' && (
                   <TouchableOpacity style={styles.createTestUserButton} onPress={createTestTenantUser}>
                     <Text style={styles.createTestUserButtonText}>Create Test Tenant User</Text>
                   </TouchableOpacity>
@@ -232,9 +277,19 @@ const AddTenantScreen: React.FC = () => {
                   style={styles.modalItem}
                   onPress={() => onSelect(item)}
                 >
-                  <Text style={styles.modalItemText}>
-                    {item.name || item.email || `ID: ${item.id || item.uid}`}
-                  </Text>
+                  <View style={styles.modalItemContent}>
+                    <Text style={styles.modalItemText}>
+                      {item.name || 'No Name'}
+                    </Text>
+                    <Text style={styles.modalItemSubtext}>
+                      {item.email}
+                    </Text>
+                    {item.phone && (
+                      <Text style={styles.modalItemSubtext}>
+                        {item.phone}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               ))
             )}
@@ -267,7 +322,7 @@ const AddTenantScreen: React.FC = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* User Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select User</Text>
+          <Text style={styles.sectionTitle}>Select Approved Tenant</Text>
           <TouchableOpacity
             style={[styles.pickerButton, availableUsers.length === 0 && styles.pickerButtonDisabled]}
             onPress={() => availableUsers.length > 0 && setShowUserPicker(true)}
@@ -277,15 +332,15 @@ const AddTenantScreen: React.FC = () => {
               {selectedUser 
                 ? selectedUser.name || selectedUser.email 
                 : availableUsers.length === 0 
-                  ? 'No tenant users available' 
-                  : 'Select a user'
+                  ? 'No approved tenants available' 
+                  : 'Select an approved tenant'
               }
             </Text>
             <Text style={styles.pickerArrow}>›</Text>
           </TouchableOpacity>
           {availableUsers.length === 0 && (
             <Text style={styles.helperText}>
-              No tenant users found. Users need to register with the 'tenant' role to be available here.
+              No approved tenants found. Only tenants with approved applications and no room assignments are shown here.
             </Text>
           )}
         </View>
@@ -349,14 +404,22 @@ const AddTenantScreen: React.FC = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Agreement Period</Text>
           <View style={styles.dateContainer}>
-            <View style={styles.dateInput}>
+            <TouchableOpacity 
+              style={styles.dateInput}
+              onPress={() => showDatePicker(true)}
+            >
               <Text style={styles.dateLabel}>Start Date</Text>
               <Text style={styles.dateValue}>{formatDate(agreementStart)}</Text>
-            </View>
-            <View style={styles.dateInput}>
+              <Text style={styles.datePickerHint}>Tap to change</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.dateInput}
+              onPress={() => showDatePicker(false)}
+            >
               <Text style={styles.dateLabel}>End Date</Text>
               <Text style={styles.dateValue}>{formatDate(agreementEnd)}</Text>
-            </View>
+              <Text style={styles.datePickerHint}>Tap to change</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -386,7 +449,7 @@ const AddTenantScreen: React.FC = () => {
 
       {/* Picker Modals */}
       {renderPickerModal(
-        'Select User',
+        'Select Approved Tenant',
         availableUsers,
         handleUserSelect,
         showUserPicker,
@@ -407,6 +470,58 @@ const AddTenantScreen: React.FC = () => {
         handleRoomSelect,
         showRoomPicker,
         () => setShowRoomPicker(false)
+      )}
+
+      {/* Android Date Pickers */}
+      {showStartDatePicker && Platform.OS === 'android' && (
+        <View style={styles.datePickerOverlay}>
+          <View style={styles.datePickerContainer}>
+            <Text style={styles.datePickerTitle}>Select Start Date</Text>
+            <TouchableOpacity 
+              style={styles.datePickerButton}
+              onPress={() => {
+                // For now, we'll use a simple date increment
+                const newDate = new Date();
+                setAgreementStart(newDate);
+                setShowStartDatePicker(false);
+              }}
+            >
+              <Text style={styles.datePickerButtonText}>Set to Today</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.datePickerButton}
+              onPress={() => setShowStartDatePicker(false)}
+            >
+              <Text style={styles.datePickerButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+      
+      {showEndDatePicker && Platform.OS === 'android' && (
+        <View style={styles.datePickerOverlay}>
+          <View style={styles.datePickerContainer}>
+            <Text style={styles.datePickerTitle}>Select End Date</Text>
+            <TouchableOpacity 
+              style={styles.datePickerButton}
+              onPress={() => {
+                // Set end date to 1 year after start date
+                const newEndDate = new Date(agreementStart);
+                newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+                setAgreementEnd(newEndDate);
+                setShowEndDatePicker(false);
+              }}
+            >
+              <Text style={styles.datePickerButtonText}>Set to 1 Year Later</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.datePickerButton}
+              onPress={() => setShowEndDatePicker(false)}
+            >
+              <Text style={styles.datePickerButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -521,6 +636,49 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '500',
   },
+  datePickerHint: {
+    fontSize: fonts.xs,
+    color: colors.textMuted,
+    marginTop: dimensions.spacing.xs,
+  },
+  datePickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  datePickerContainer: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.lg,
+    padding: dimensions.spacing.lg,
+    width: '80%',
+    alignItems: 'center',
+  },
+  datePickerTitle: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.lg,
+  },
+  datePickerButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+    marginBottom: dimensions.spacing.sm,
+    width: '100%',
+    alignItems: 'center',
+  },
+  datePickerButtonText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '600',
+  },
   submitButton: {
     backgroundColor: colors.primary,
     borderRadius: dimensions.borderRadius.md,
@@ -603,9 +761,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.lightGray,
   },
+  modalItemContent: {
+    flex: 1,
+  },
   modalItemText: {
     fontSize: fonts.md,
     color: colors.textPrimary,
+    fontWeight: '500',
+  },
+  modalItemSubtext: {
+    fontSize: fonts.sm,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   emptyModalItem: {
     padding: dimensions.spacing.lg,
