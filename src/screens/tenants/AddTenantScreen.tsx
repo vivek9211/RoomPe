@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 
 import { colors, fonts, dimensions } from '../../constants';
@@ -360,29 +361,6 @@ const AddTenantScreen: React.FC = () => {
     }
   };
 
-  const handleDateChange = (event: any, selectedDate?: Date, isStartDate: boolean = true) => {
-    if (event.type === 'set' && selectedDate) {
-      if (isStartDate) {
-        setAgreementStart(selectedDate);
-        // If end date is before new start date, update end date to be 1 year after start date
-        if (agreementEnd <= selectedDate) {
-          const newEndDate = new Date(selectedDate);
-          newEndDate.setFullYear(newEndDate.getFullYear() + 1);
-          setAgreementEnd(newEndDate);
-        }
-      } else {
-        setAgreementEnd(selectedDate);
-      }
-    }
-    
-    // Hide the picker
-    if (isStartDate) {
-      setShowStartDatePicker(false);
-    } else {
-      setShowEndDatePicker(false);
-    }
-  };
-
   const renderPickerModal = (title: string, data: any[], onSelect: (item: any) => void, visible: boolean, onClose: () => void) => {
     if (!visible) return null;
 
@@ -563,11 +541,12 @@ const AddTenantScreen: React.FC = () => {
 
         {/* Agreement Dates */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Agreement Period</Text>
+          <Text style={[styles.sectionTitle, styles.agreementPeriodTitle]}>Agreement Period</Text>
           <View style={styles.dateContainer}>
             <TouchableOpacity 
               style={styles.dateInput}
               onPress={() => showDatePicker(true)}
+              activeOpacity={0.8}
             >
               <Text style={styles.dateLabel}>Start Date</Text>
               <Text style={styles.dateValue}>{formatDate(agreementStart)}</Text>
@@ -576,6 +555,7 @@ const AddTenantScreen: React.FC = () => {
             <TouchableOpacity 
               style={styles.dateInput}
               onPress={() => showDatePicker(false)}
+              activeOpacity={0.8}
             >
               <Text style={styles.dateLabel}>End Date</Text>
               <Text style={styles.dateValue}>{formatDate(agreementEnd)}</Text>
@@ -589,6 +569,7 @@ const AddTenantScreen: React.FC = () => {
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
           onPress={handleSubmit}
           disabled={loading}
+          activeOpacity={0.8}
         >
           {loading ? (
             <ActivityIndicator color={colors.white} />
@@ -633,56 +614,51 @@ const AddTenantScreen: React.FC = () => {
         () => setShowRoomPicker(false)
       )}
 
-      {/* Android Date Pickers */}
-      {showStartDatePicker && Platform.OS === 'android' && (
-        <View style={styles.datePickerOverlay}>
-          <View style={styles.datePickerContainer}>
-            <Text style={styles.datePickerTitle}>Select Start Date</Text>
-            <TouchableOpacity 
-              style={styles.datePickerButton}
-              onPress={() => {
-                // For now, we'll use a simple date increment
-                const newDate = new Date();
-                setAgreementStart(newDate);
-                setShowStartDatePicker(false);
-              }}
-            >
-              <Text style={styles.datePickerButtonText}>Set to Today</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.datePickerButton}
-              onPress={() => setShowStartDatePicker(false)}
-            >
-              <Text style={styles.datePickerButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-      
-      {showEndDatePicker && Platform.OS === 'android' && (
-        <View style={styles.datePickerOverlay}>
-          <View style={styles.datePickerContainer}>
-            <Text style={styles.datePickerTitle}>Select End Date</Text>
-            <TouchableOpacity 
-              style={styles.datePickerButton}
-              onPress={() => {
-                // Set end date to 1 year after start date
-                const newEndDate = new Date(agreementStart);
+      {/* Native Date Pickers */}
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={agreementStart}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            if (Platform.OS === 'android') {
+              setShowStartDatePicker(false);
+            }
+            if (event.type === 'set' && selectedDate) {
+              setAgreementStart(selectedDate);
+              // Update end date if needed
+              if (agreementEnd <= selectedDate) {
+                const newEndDate = new Date(selectedDate);
                 newEndDate.setFullYear(newEndDate.getFullYear() + 1);
                 setAgreementEnd(newEndDate);
-                setShowEndDatePicker(false);
-              }}
-            >
-              <Text style={styles.datePickerButtonText}>Set to 1 Year Later</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.datePickerButton}
-              onPress={() => setShowEndDatePicker(false)}
-            >
-              <Text style={styles.datePickerButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+              }
+            }
+            if (Platform.OS === 'ios') {
+              setShowStartDatePicker(false);
+            }
+          }}
+          minimumDate={new Date()}
+        />
+      )}
+      
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={agreementEnd}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            if (Platform.OS === 'android') {
+              setShowEndDatePicker(false);
+            }
+            if (event.type === 'set' && selectedDate) {
+              setAgreementEnd(selectedDate);
+            }
+            if (Platform.OS === 'ios') {
+              setShowEndDatePicker(false);
+            }
+          }}
+          minimumDate={agreementStart}
+        />
       )}
     </SafeAreaView>
   );
@@ -700,6 +676,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
     height: 56,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   backButton: {
     marginRight: dimensions.spacing.md,
@@ -722,26 +703,41 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: dimensions.spacing.lg,
+    paddingTop: dimensions.spacing.md,
   },
   section: {
-    marginBottom: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.xl,
   },
   sectionTitle: {
-    fontSize: fonts.md,
+    fontSize: fonts.lg,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.md,
+    marginTop: dimensions.spacing.lg,
+  },
+  agreementPeriodTitle: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.primary,
+    marginBottom: dimensions.spacing.md,
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   pickerButton: {
     backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
     borderRadius: dimensions.borderRadius.md,
     paddingHorizontal: dimensions.spacing.md,
     paddingVertical: dimensions.spacing.md,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   pickerButtonDisabled: {
     backgroundColor: colors.lightGray,
@@ -767,95 +763,85 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
     borderRadius: dimensions.borderRadius.md,
     paddingHorizontal: dimensions.spacing.md,
     paddingVertical: dimensions.spacing.md,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
     fontSize: fonts.md,
     color: colors.textPrimary,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   dateContainer: {
     flexDirection: 'row',
     gap: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
   },
   dateInput: {
     flex: 1,
     backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
-    padding: dimensions.spacing.md,
     borderWidth: 1,
     borderColor: colors.lightGray,
+    borderRadius: dimensions.borderRadius.md,
+    padding: dimensions.spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    minHeight: 60,
+    justifyContent: 'center',
   },
   dateLabel: {
-    fontSize: fonts.sm,
+    fontSize: fonts.xs,
     color: colors.textSecondary,
     marginBottom: dimensions.spacing.xs,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   dateValue: {
     fontSize: fonts.md,
     color: colors.textPrimary,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginBottom: dimensions.spacing.xs,
   },
   datePickerHint: {
-    fontSize: fonts.xs,
+    fontSize: 10,
     color: colors.textMuted,
-    marginTop: dimensions.spacing.xs,
+    fontStyle: 'italic',
+    opacity: 0.7,
   },
-  datePickerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  datePickerContainer: {
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.lg,
-    padding: dimensions.spacing.lg,
-    width: '80%',
-    alignItems: 'center',
-  },
-  datePickerTitle: {
-    fontSize: fonts.lg,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.lg,
-  },
-  datePickerButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.md,
-    marginBottom: dimensions.spacing.sm,
-    width: '100%',
-    alignItems: 'center',
-  },
-  datePickerButtonText: {
-    color: colors.white,
-    fontSize: fonts.md,
-    fontWeight: '600',
-  },
+  
   submitButton: {
     backgroundColor: colors.primary,
-    borderRadius: dimensions.borderRadius.md,
     paddingVertical: dimensions.spacing.lg,
+    borderRadius: dimensions.borderRadius.md,
     alignItems: 'center',
-    marginTop: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.xl,
+    marginVertical: dimensions.spacing.lg,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    minHeight: 48,
+    borderWidth: 0,
   },
   submitButtonDisabled: {
-    backgroundColor: colors.lightGray,
-    opacity: 0.6,
+    backgroundColor: colors.textMuted,
+    shadowOpacity: 0.1,
+    shadowColor: colors.textMuted,
   },
   submitButtonText: {
     color: colors.white,
-    fontSize: fonts.lg,
+    fontSize: fonts.md,
     fontWeight: '600',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   errorContainer: {
     backgroundColor: colors.error,
@@ -896,6 +882,11 @@ const styles = StyleSheet.create({
     borderRadius: dimensions.borderRadius.lg,
     width: '90%',
     maxHeight: '70%',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -921,6 +912,7 @@ const styles = StyleSheet.create({
     padding: dimensions.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.lightGray,
+    backgroundColor: colors.white,
   },
   modalItemContent: {
     flex: 1,
@@ -951,12 +943,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.md,
     paddingVertical: dimensions.spacing.sm,
     borderRadius: dimensions.borderRadius.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  createTestUserButtonText: {
-    color: colors.white,
-    fontSize: fonts.sm,
-    fontWeight: '600',
-  },
+     createTestUserButtonText: {
+     color: colors.white,
+     fontSize: fonts.sm,
+     fontWeight: '600',
+   },
 });
 
 export default AddTenantScreen;
