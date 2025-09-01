@@ -65,6 +65,14 @@ const AddTenantScreen: React.FC = () => {
   useEffect(() => {
     if (selectedProperty) {
       loadAvailableRooms(selectedProperty.id);
+      // Clear selected room when property changes
+      setSelectedRoom(null);
+      setFormData(prev => ({ ...prev, roomId: '' }));
+    } else {
+      // Clear rooms when no property is selected
+      setAvailableRooms([]);
+      setSelectedRoom(null);
+      setFormData(prev => ({ ...prev, roomId: '' }));
     }
   }, [selectedProperty]);
 
@@ -126,42 +134,138 @@ const AddTenantScreen: React.FC = () => {
         // Iterate through floor configurations to find available rooms
         for (const floor of roomMapping.floorConfigs) {
           for (const unit of floor.units || []) {
-            for (const room of unit.rooms || []) {
-              // Check if room is available (not fully occupied)
-              if (room.occupied < room.capacity) {
-                rooms.push({
-                  id: room.id,
-                  name: `Room ${room.roomNumber || room.id}`,
-                  roomNumber: room.roomNumber || room.id,
-                  type: room.type || 'single',
-                  capacity: room.capacity || 1,
-                  occupied: room.occupied || 0,
-                });
+            // Check if unit is available (not fully occupied)
+            if (!unit.isOccupied || unit.tenantIds.length < unit.capacity) {
+              const unitType = unit.unitType || 'room';
+              const sharingType = unit.sharingType || 'single';
+              
+              // Create room display name based on unit type and floor
+              let roomName = '';
+              let roomType = '';
+              
+              switch (unitType) {
+                case 'rk':
+                  roomName = `RK ${unit.unitNumber}`;
+                  roomType = 'RK (Room + Kitchen)';
+                  break;
+                case 'bhk_1':
+                  roomName = `1 BHK ${unit.unitNumber}`;
+                  roomType = '1 BHK Flat';
+                  break;
+                case 'bhk_2':
+                  roomName = `2 BHK ${unit.unitNumber}`;
+                  roomType = '2 BHK Flat';
+                  break;
+                case 'bhk_3':
+                  roomName = `3 BHK ${unit.unitNumber}`;
+                  roomType = '3 BHK Flat';
+                  break;
+                case 'bhk_4':
+                  roomName = `4 BHK ${unit.unitNumber}`;
+                  roomType = '4 BHK Flat';
+                  break;
+                case 'bhk_5':
+                  roomName = `5 BHK ${unit.unitNumber}`;
+                  roomType = '5 BHK Flat';
+                  break;
+                case 'bhk_6':
+                  roomName = `6 BHK ${unit.unitNumber}`;
+                  roomType = '6 BHK Flat';
+                  break;
+                case 'studio_apartment':
+                  roomName = `Studio ${unit.unitNumber}`;
+                  roomType = 'Studio Apartment';
+                  break;
+                case 'room':
+                default:
+                  // Handle room sharing types
+                  switch (sharingType) {
+                    case 'single':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Single Room';
+                      break;
+                    case 'double':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Double Sharing';
+                      break;
+                    case 'triple':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Triple Sharing';
+                      break;
+                    case 'four_sharing':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Four Sharing';
+                      break;
+                    case 'five_sharing':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Five Sharing';
+                      break;
+                    case 'six_sharing':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Six Sharing';
+                      break;
+                    case 'seven_sharing':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Seven Sharing';
+                      break;
+                    case 'eight_sharing':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Eight Sharing';
+                      break;
+                    case 'nine_sharing':
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Nine Sharing';
+                      break;
+                    default:
+                      roomName = `Room ${unit.unitNumber}`;
+                      roomType = 'Room';
+                  }
               }
+              
+              // Add floor information if available
+              if (floor.floorName) {
+                roomName += ` (${floor.floorName})`;
+              }
+              
+              rooms.push({
+                id: unit.id,
+                name: roomName,
+                roomNumber: unit.unitNumber,
+                type: roomType,
+                unitType: unitType,
+                sharingType: sharingType,
+                capacity: unit.capacity || 1,
+                occupied: unit.tenantIds.length || 0,
+                floorName: floor.floorName || `Floor ${floor.floorNumber}`,
+                rent: unit.rent || 0,
+                deposit: unit.deposit || 0,
+              });
             }
           }
         }
       }
       
-      // If no rooms found in mapping, create some default rooms
+      // If no rooms found in mapping, create some default rooms with variety
       if (rooms.length === 0) {
         rooms.push(
-          { id: '101', name: 'Room 101', roomNumber: '101', type: 'single', capacity: 1, occupied: 0 },
-          { id: '102', name: 'Room 102', roomNumber: '102', type: 'single', capacity: 1, occupied: 0 },
-          { id: '201', name: 'Room 201', roomNumber: '201', type: 'single', capacity: 1, occupied: 0 },
-          { id: '202', name: 'Room 202', roomNumber: '202', type: 'single', capacity: 1, occupied: 0 },
+          { id: '101', name: 'Room 101 (Ground Floor)', roomNumber: '101', type: 'Single Room', unitType: 'room', sharingType: 'single', capacity: 1, occupied: 0, floorName: 'Ground Floor', rent: 5000, deposit: 10000 },
+          { id: '102', name: 'Room 102 (Ground Floor)', roomNumber: '102', type: 'Double Sharing', unitType: 'room', sharingType: 'double', capacity: 2, occupied: 0, floorName: 'Ground Floor', rent: 4000, deposit: 8000 },
+          { id: '201', name: '1 BHK 201 (1st Floor)', roomNumber: '201', type: '1 BHK Flat', unitType: 'bhk_1', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 8000, deposit: 16000 },
+          { id: '202', name: 'RK 202 (1st Floor)', roomNumber: '202', type: 'RK (Room + Kitchen)', unitType: 'rk', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 6000, deposit: 12000 },
+          { id: '301', name: '2 BHK 301 (2nd Floor)', roomNumber: '301', type: '2 BHK Flat', unitType: 'bhk_2', sharingType: 'single', capacity: 1, occupied: 0, floorName: '2nd Floor', rent: 12000, deposit: 24000 },
+          { id: '302', name: 'Studio 302 (2nd Floor)', roomNumber: '302', type: 'Studio Apartment', unitType: 'studio_apartment', sharingType: 'single', capacity: 1, occupied: 0, floorName: '2nd Floor', rent: 7000, deposit: 14000 },
         );
       }
       
       setAvailableRooms(rooms);
     } catch (error) {
       console.error('Error loading rooms:', error);
-      // Fallback to default rooms if there's an error
+      // Fallback to default rooms with variety if there's an error
       setAvailableRooms([
-        { id: '101', name: 'Room 101', roomNumber: '101', type: 'single', capacity: 1, occupied: 0 },
-        { id: '102', name: 'Room 102', roomNumber: '102', type: 'single', capacity: 1, occupied: 0 },
-        { id: '201', name: 'Room 201', roomNumber: '201', type: 'single', capacity: 1, occupied: 0 },
-        { id: '202', name: 'Room 202', roomNumber: '202', type: 'single', capacity: 1, occupied: 0 },
+        { id: '101', name: 'Room 101 (Ground Floor)', roomNumber: '101', type: 'Single Room', unitType: 'room', sharingType: 'single', capacity: 1, occupied: 0, floorName: 'Ground Floor', rent: 5000, deposit: 10000 },
+        { id: '102', name: 'Room 102 (Ground Floor)', roomNumber: '102', type: 'Double Sharing', unitType: 'room', sharingType: 'double', capacity: 2, occupied: 0, floorName: 'Ground Floor', rent: 4000, deposit: 8000 },
+        { id: '201', name: '1 BHK 201 (1st Floor)', roomNumber: '201', type: '1 BHK Flat', unitType: 'bhk_1', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 8000, deposit: 16000 },
+        { id: '202', name: 'RK 202 (1st Floor)', roomNumber: '202', type: 'RK (Room + Kitchen)', unitType: 'rk', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 6000, deposit: 12000 },
       ]);
     }
   };
@@ -319,19 +423,14 @@ const AddTenantScreen: React.FC = () => {
                     <Text style={styles.modalItemText}>
                       {item.name || 'No Name'}
                     </Text>
-                    {title === 'Select Room' ? (
-                      // Show room-specific information
-                      <Text style={styles.modalItemSubtext}>
-                        {item.type === 'single' ? 'Single Room' : 
-                         item.type === 'double' ? 'Double Sharing' :
-                         item.type === 'triple' ? 'Triple Sharing' :
-                         item.type === 'quad' ? 'Quad Sharing' :
-                         item.type === 'ac' ? 'AC Room' :
-                         item.type === 'non_ac' ? 'Non-AC Room' :
-                         item.type === 'deluxe' ? 'Deluxe Room' :
-                         item.type} • {item.occupied}/{item.capacity} occupied
-                      </Text>
-                    ) : (
+                                         {title === 'Select Room' ? (
+                       // Show room-specific information
+                       <Text style={styles.modalItemSubtext}>
+                         {item.type} • {item.occupied}/{item.capacity} occupied
+                         {item.floorName && ` • ${item.floorName}`}
+                         {item.rent > 0 && ` • ₹${item.rent.toLocaleString()}/month`}
+                       </Text>
+                     ) : (
                       // Show user information
                       <>
                         <Text style={styles.modalItemSubtext}>
@@ -427,18 +526,13 @@ const AddTenantScreen: React.FC = () => {
             </Text>
             <Text style={styles.pickerArrow}>›</Text>
           </TouchableOpacity>
-          {selectedRoom && (
-            <Text style={styles.helperText}>
-              {selectedRoom.type === 'single' ? 'Single Room' : 
-               selectedRoom.type === 'double' ? 'Double Sharing' :
-               selectedRoom.type === 'triple' ? 'Triple Sharing' :
-               selectedRoom.type === 'quad' ? 'Quad Sharing' :
-               selectedRoom.type === 'ac' ? 'AC Room' :
-               selectedRoom.type === 'non_ac' ? 'Non-AC Room' :
-               selectedRoom.type === 'deluxe' ? 'Deluxe Room' :
-               selectedRoom.type} • {selectedRoom.occupied}/{selectedRoom.capacity} currently occupied
-            </Text>
-          )}
+                     {selectedRoom && (
+             <Text style={styles.helperText}>
+               {selectedRoom.type} • {selectedRoom.occupied}/{selectedRoom.capacity} currently occupied
+               {selectedRoom.floorName && ` • ${selectedRoom.floorName}`}
+               {selectedRoom.rent > 0 && ` • ₹${selectedRoom.rent.toLocaleString()}/month`}
+             </Text>
+           )}
         </View>
 
         {/* Rent Amount */}
