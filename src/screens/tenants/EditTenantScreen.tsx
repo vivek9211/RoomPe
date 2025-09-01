@@ -74,35 +74,17 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
       // Get tenant application
       let application = null;
       try {
-        // First try to get applications by tenant ID
-        const applications = await firestoreService.getTenantApplicationsByTenant(tenantData.userId);
-        application = applications.find((app: any) => app.propertyId === tenantData.propertyId);
-      } catch (error) {
-        console.error('Error fetching tenant application by tenantId:', error);
-        
-        // Try alternative approach - get all applications for the owner and filter
-        try {
-          if (user) {
-            console.log('Trying alternative approach with owner applications...');
-            const allApplications = await firestoreService.getAllTenantApplicationsByOwner(user.uid);
-            application = allApplications.find((app: any) => 
-              app.tenantId === tenantData.userId && app.propertyId === tenantData.propertyId
-            );
-          }
-        } catch (altError) {
-          console.error('Alternative approach also failed:', altError);
-          
-          // Final fallback: try to get all applications without filter
-          try {
-            console.log('Trying final fallback approach...');
-            const allApplications = await firestoreService.getAllTenantApplicationsByOwner(user?.uid || '');
-            application = allApplications.find((app: any) => 
-              app.tenantId === tenantData.userId && app.propertyId === tenantData.propertyId
-            );
-          } catch (finalError) {
-            console.error('All approaches failed:', finalError);
-          }
+        // Skip the problematic tenantId query and go directly to the working approach
+        if (user) {
+          console.log('Getting applications for owner...');
+          const allApplications = await firestoreService.getAllTenantApplicationsByOwner(user.uid);
+          application = allApplications.find((app: any) => 
+            app.tenantId === tenantData.userId && app.propertyId === tenantData.propertyId
+          );
         }
+      } catch (error) {
+        console.error('Error fetching tenant applications:', error);
+        // Application data is optional, so we can continue without it
       }
 
       const tenantWithData: TenantWithUserData = {
@@ -308,22 +290,7 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
                 <Text style={styles.statusBadgeText}>{getStatusText(tenant.status)}</Text>
               </View>
             </View>
-            {tenant.application && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Application Status:</Text>
-                <View style={[styles.statusBadge, { 
-                  backgroundColor: tenant.application.status === TenantApplicationStatus.APPROVED 
-                    ? colors.success 
-                    : tenant.application.status === TenantApplicationStatus.PENDING 
-                    ? colors.warning 
-                    : colors.error 
-                }]}>
-                  <Text style={styles.statusBadgeText}>
-                    {tenant.application.status.charAt(0).toUpperCase() + tenant.application.status.slice(1)}
-                  </Text>
-                </View>
-              </View>
-            )}
+
           </View>
         </View>
 
@@ -425,17 +392,23 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.submitButtonText}>Update Tenant</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.submitButtonContainer}>
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+                         {loading ? (
+               <>
+                 <ActivityIndicator color={colors.white} size="small" />
+                 <Text style={styles.submitButtonText}>Updating...</Text>
+               </>
+             ) : (
+               <Text style={styles.submitButtonText}>Update Tenant</Text>
+             )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Error Message */}
@@ -630,18 +603,29 @@ const styles = StyleSheet.create({
   statusOptionTextActive: {
     color: colors.white,
   },
+  submitButtonContainer: {
+    marginTop: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.xl,
+    paddingHorizontal: dimensions.spacing.md,
+  },
   submitButton: {
     backgroundColor: colors.primary,
     borderRadius: dimensions.borderRadius.md,
-    paddingVertical: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.lg,
     alignItems: 'center',
-    marginTop: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.xl,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   submitButtonDisabled: {
     backgroundColor: colors.lightGray,
     opacity: 0.6,
+    shadowOpacity: 0.1,
   },
+
   submitButtonText: {
     color: colors.white,
     fontSize: fonts.lg,
