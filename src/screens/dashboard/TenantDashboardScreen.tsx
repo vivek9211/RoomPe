@@ -8,39 +8,109 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { firestoreService } from '../../services/firestore';
+import { TenantApplication, TenantApplicationStatus } from '../../types/tenant.types';
+import { Property } from '../../types/property.types';
 
 interface TenantDashboardScreenProps {
   navigation: any;
 }
 
+interface AssignedPropertyData {
+  application: TenantApplication;
+  property: Property;
+}
+
 const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigation }) => {
-  const { userProfile, signOut } = useAuth();
-  const [currentTime, setCurrentTime] = useState('10:34');
-  const [batteryLevel, setBatteryLevel] = useState('47');
+  const { userProfile } = useAuth();
+  const [assignedProperty, setAssignedProperty] = useState<AssignedPropertyData | null>(null);
+  const [loadingProperty, setLoadingProperty] = useState(true);
 
+  // Fetch assigned property on component mount and set up real-time listener
   useEffect(() => {
-    // Update time every minute
-    const timeInterval = setInterval(() => {
-      const now = new Date();
-      const hours = now.getHours().toString().padStart(2, '0');
-      const minutes = now.getMinutes().toString().padStart(2, '0');
-      setCurrentTime(`${hours}:${minutes}`);
-    }, 60000);
+    console.log('TenantDashboard useEffect triggered');
+    console.log('userProfile:', userProfile);
+    
+    if (userProfile?.uid) {
+      console.log('User profile found, loading assigned property');
+      loadAssignedProperty();
+      
+      // Set up real-time listener for tenant applications
+      const unsubscribe = firestoreService.onTenantApplicationsByTenantChange(
+        userProfile.uid,
+        async (applications) => {
+          console.log('Real-time applications update:', applications);
+          // Find the approved application
+          const approvedApplication = applications.find(
+            (app: TenantApplication) => app.status === TenantApplicationStatus.APPROVED
+          );
 
-    // Update battery level (mock - replace with actual battery API)
-    const batteryInterval = setInterval(() => {
-      setBatteryLevel(Math.floor(Math.random() * 30 + 40).toString());
-    }, 30000);
+          if (approvedApplication) {
+            // Fetch the property details
+            const property = await firestoreService.getPropertyById(approvedApplication.propertyId);
+            
+            if (property) {
+              setAssignedProperty({
+                application: approvedApplication,
+                property: property,
+              });
+            }
+          } else {
+            setAssignedProperty(null);
+          }
+        }
+      );
+      
+      return () => unsubscribe();
+    } else {
+      console.log('No user profile found');
+    }
+  }, [userProfile?.uid]);
 
-    return () => {
-      clearInterval(timeInterval);
-      clearInterval(batteryInterval);
-    };
-  }, []);
+  const loadAssignedProperty = async () => {
+    if (!userProfile?.uid) return;
+
+    try {
+      setLoadingProperty(true);
+      console.log('Loading assigned property for user:', userProfile.uid);
+      
+      // Get all tenant applications for this user
+      const applications = await firestoreService.getTenantApplicationsByTenant(userProfile.uid);
+      console.log('Found applications:', applications);
+      
+      // Find the approved application
+      const approvedApplication = applications.find(
+        (app: TenantApplication) => app.status === TenantApplicationStatus.APPROVED
+      );
+      console.log('Approved application:', approvedApplication);
+
+      if (approvedApplication) {
+        // Fetch the property details
+        const property = await firestoreService.getPropertyById(approvedApplication.propertyId);
+        console.log('Property details:', property);
+        
+        if (property) {
+          setAssignedProperty({
+            application: approvedApplication,
+            property: property,
+          });
+          console.log('Assigned property set successfully');
+        }
+      } else {
+        console.log('No approved application found');
+      }
+    } catch (error) {
+      console.error('Error loading assigned property:', error);
+    } finally {
+      setLoadingProperty(false);
+    }
+  };
 
   const handlePayDues = () => {
     navigation.navigate('Payments');
@@ -58,46 +128,48 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     Alert.alert('Attendance', 'Mark your attendance for leave requests');
   };
 
-  const handleStories = () => {
-    Alert.alert('Stories', 'View property updates and announcements');
+  const handleFindProperties = () => {
+    navigation.navigate('AssignProperty');
   };
 
   const handleNotifications = () => {
     Alert.alert('Notifications', 'View your notifications');
   };
 
+
+
   const handleHelp = () => {
     Alert.alert('Help', 'Contact support at support@roompe.com');
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+  const handleViewPropertyDetails = () => {
+    console.log('handleViewPropertyDetails called');
+    console.log('assignedProperty:', assignedProperty);
+    
+    if (assignedProperty) {
+      console.log('Navigating to AssignedPropertyDetail with:', {
+        property: assignedProperty.property,
+        application: assignedProperty.application
+      });
+      
+      navigation.navigate('AssignedPropertyDetail', { 
+        property: assignedProperty.property,
+        application: assignedProperty.application 
+      });
+    } else {
+      console.log('No assigned property found');
+      Alert.alert('No Property', 'You don\'t have an assigned property yet.');
+    }
   };
 
   const getMemberSinceDate = () => {
     if (userProfile?.createdAt) {
-      const date = new Date(userProfile.createdAt);
+      let date: Date;
+      if (userProfile.createdAt.toDate && typeof userProfile.createdAt.toDate === 'function') {
+        date = userProfile.createdAt.toDate();
+      } else {
+        date = new Date(userProfile.createdAt as any);
+      }
       const day = date.getDate();
       const month = date.toLocaleString('default', { month: 'short' });
       const year = date.getFullYear();
@@ -106,61 +178,128 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     return 'Recently';
   };
 
+  const formatMoveInDate = (timestamp: any) => {
+    if (!timestamp) return 'Not specified';
+    let date: Date;
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      date = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    } else {
+      date = new Date(timestamp);
+    }
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar
-        barStyle="dark-content"
-        backgroundColor={colors.background}
-        translucent={false}
+        barStyle="light-content"
+        backgroundColor={colors.primary}
+        translucent={true}
       />
       
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <Text style={styles.timeText}>{currentTime}</Text>
-        <View style={styles.statusIcons}>
-          <Text style={styles.signalIcon}>📶</Text>
-          <Text style={styles.wifiIcon}>📶</Text>
-          <Text style={styles.batteryIcon}>🔋</Text>
-          <Text style={styles.batteryLevel}>{batteryLevel}</Text>
+      {/* Top Bar */}
+      <View style={styles.topBar}>
+        <View style={styles.userInfo}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.avatarText}>👤</Text>
+          </View>
+          <View style={styles.userDetails}>
+            <Text style={styles.greeting}>Hello, {userProfile?.name || 'User'}</Text>
+            <Text style={styles.memberSince}>Member Since {getMemberSinceDate()}</Text>
+          </View>
         </View>
+        
+                 <View style={styles.actionIcons}>
+           <TouchableOpacity style={styles.notificationIcon} onPress={handleNotifications}>
+             <Text style={styles.iconText}>🔔</Text>
+           </TouchableOpacity>
+         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header Section */}
-        <View style={styles.headerSection}>
-          <View style={styles.userInfo}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.avatarText}>👤</Text>
-            </View>
-            <View style={styles.userDetails}>
-              <Text style={styles.greeting}>Hello, {userProfile?.name || 'User'}</Text>
-              <Text style={styles.memberSince}>Member Since {getMemberSinceDate()}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.storiesButton} onPress={handleStories}>
-              <View style={styles.storiesIcon}>
-                <Text style={styles.iconText}>📢</Text>
-              </View>
-              <Text style={styles.actionLabel}>Stories</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.notificationButton} onPress={handleNotifications}>
-              <View style={styles.notificationIcon}>
-                <Text style={styles.iconText}>🔔</Text>
-              </View>
-              <Text style={styles.actionLabel}>Notification</Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <View style={styles.logoutIcon}>
-                <Text style={styles.iconText}>🚪</Text>
+        {/* Assigned Property Section */}
+        {loadingProperty ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading your property...</Text>
+          </View>
+        ) : assignedProperty ? (
+          <View style={styles.assignedPropertySection}>
+            <Text style={styles.sectionTitle}>Your Assigned Property</Text>
+            
+                         <TouchableOpacity 
+               style={styles.propertyCard} 
+               onPress={handleViewPropertyDetails}
+               activeOpacity={0.7}
+             >
+              <View style={styles.propertyHeader}>
+                <Text style={styles.propertyName}>{assignedProperty.property.name}</Text>
+                <View style={styles.statusBadge}>
+                  <Text style={styles.statusText}>Approved</Text>
+                </View>
               </View>
-              <Text style={styles.actionLabel}>Logout</Text>
+              
+              <View style={styles.propertyDetails}>
+                <View style={styles.propertyInfo}>
+                  <Text style={styles.propertyLabel}>Property Type</Text>
+                  <Text style={styles.propertyValue}>{assignedProperty.property.type}</Text>
+                </View>
+                
+                <View style={styles.propertyInfo}>
+                  <Text style={styles.propertyLabel}>Location</Text>
+                  <Text style={styles.propertyValue}>
+                    {assignedProperty.property.location?.address || 'Address not available'}
+                  </Text>
+                </View>
+                
+                <View style={styles.propertyInfo}>
+                  <Text style={styles.propertyLabel}>Move-in Date</Text>
+                  <Text style={styles.propertyValue}>
+                    {formatMoveInDate(assignedProperty.application.requestedMoveInDate)}
+                  </Text>
+                </View>
+                
+                {assignedProperty.application.requestedRent && (
+                  <View style={styles.propertyInfo}>
+                    <Text style={styles.propertyLabel}>Requested Rent</Text>
+                    <Text style={styles.propertyValue}>₹{assignedProperty.application.requestedRent}</Text>
+                  </View>
+                )}
+              </View>
+              
+                             <View style={styles.propertyActions}>
+                 <TouchableOpacity 
+                   style={styles.viewDetailsButton}
+                   onPress={handleViewPropertyDetails}
+                   activeOpacity={0.7}
+                 >
+                   <Text style={styles.viewDetailsText}>View Details</Text>
+                 </TouchableOpacity>
+               </View>
             </TouchableOpacity>
           </View>
-        </View>
+        ) : (
+          <View style={styles.noPropertySection}>
+            <Text style={styles.sectionTitle}>No Property Assigned</Text>
+            <View style={styles.noPropertyCard}>
+              <Text style={styles.noPropertyIcon}>🏠</Text>
+              <Text style={styles.noPropertyTitle}>No Property Assigned Yet</Text>
+              <Text style={styles.noPropertySubtitle}>
+                You haven't been assigned to any property yet. Browse available properties and apply!
+              </Text>
+              <TouchableOpacity style={styles.findPropertiesButton} onPress={handleFindProperties}>
+                <Text style={styles.findPropertiesText}>Find Properties</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* My Accounts Section */}
         <View style={styles.accountsSection}>
@@ -250,6 +389,11 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
               <Text style={styles.lifeCardTitle}>Attendance</Text>
               <Text style={styles.lifeCardSubtitle}>Mark your attendance for leave requests</Text>
             </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.lifeCard} onPress={handleFindProperties}>
+              <Text style={styles.lifeCardTitle}>Find Properties</Text>
+              <Text style={styles.lifeCardSubtitle}>Browse and apply to available properties</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -268,48 +412,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  statusBar: {
+  topBar: {
+    backgroundColor: colors.primary,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.sm,
-    backgroundColor: colors.background,
-  },
-  timeText: {
-    fontSize: fonts.md,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  statusIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  signalIcon: {
-    fontSize: 16,
-    marginRight: dimensions.spacing.xs,
-  },
-  wifiIcon: {
-    fontSize: 16,
-    marginRight: dimensions.spacing.xs,
-  },
-  batteryIcon: {
-    fontSize: 16,
-    marginRight: dimensions.spacing.xs,
-  },
-  batteryLevel: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: dimensions.spacing.lg,
-  },
-  headerSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.xl,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : dimensions.spacing.md,
+    paddingBottom: dimensions.spacing.md,
+    minHeight: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 70 : 70,
   },
   userInfo: {
     flexDirection: 'row',
@@ -320,13 +431,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: dimensions.spacing.md,
   },
   avatarText: {
     fontSize: 24,
+    color: colors.white,
   },
   userDetails: {
     flex: 1,
@@ -334,62 +446,158 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: fonts.lg,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: colors.white,
     marginBottom: dimensions.spacing.xs,
   },
   memberSince: {
     fontSize: fonts.sm,
-    color: colors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
-  headerActions: {
+  actionIcons: {
     flexDirection: 'row',
-    gap: dimensions.spacing.md,
-  },
-  storiesButton: {
     alignItems: 'center',
-  },
-  storiesIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.xs,
-  },
-  notificationButton: {
-    alignItems: 'center',
-  },
-  logoutButton: {
-    alignItems: 'center',
-  },
-  logoutIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.error,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.xs,
   },
   notificationIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.xs,
   },
   iconText: {
     fontSize: 20,
     color: colors.white,
   },
-  actionLabel: {
+  content: {
+    flex: 1,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingTop: dimensions.spacing.lg,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: dimensions.spacing.xl,
+    marginBottom: dimensions.spacing.xl,
+  },
+  loadingText: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    marginTop: dimensions.spacing.sm,
+  },
+  assignedPropertySection: {
+    marginBottom: dimensions.spacing.xl,
+  },
+  propertyCard: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.lg,
+    padding: dimensions.spacing.lg,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  propertyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.md,
+  },
+  propertyName: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  statusBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: dimensions.borderRadius.sm,
+  },
+  statusText: {
+    fontSize: fonts.sm,
+    color: colors.white,
+    fontWeight: '500',
+  },
+  propertyDetails: {
+    marginBottom: dimensions.spacing.md,
+  },
+  propertyInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.sm,
+  },
+  propertyLabel: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
+  },
+  propertyValue: {
+    fontSize: fonts.sm,
+    color: colors.textPrimary,
+    fontWeight: '500',
+    textAlign: 'right',
+    flex: 1,
+  },
+  propertyActions: {
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+    paddingTop: dimensions.spacing.md,
+  },
+  viewDetailsButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.md,
+    alignItems: 'center',
+  },
+  viewDetailsText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '500',
+  },
+  noPropertySection: {
+    marginBottom: dimensions.spacing.xl,
+  },
+  noPropertyCard: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.lg,
+    padding: dimensions.spacing.xl,
+    alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  noPropertyIcon: {
+    fontSize: 48,
+    marginBottom: dimensions.spacing.md,
+  },
+  noPropertyTitle: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.sm,
+    textAlign: 'center',
+  },
+  noPropertySubtitle: {
+    fontSize: fonts.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: dimensions.spacing.lg,
+    lineHeight: 20,
+  },
+  findPropertiesButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+  },
+  findPropertiesText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '500',
   },
   accountsSection: {
     marginBottom: dimensions.spacing.xl,

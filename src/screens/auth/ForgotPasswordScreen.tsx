@@ -47,7 +47,7 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
         [
           {
             text: 'OK',
-            onPress: () => navigation.navigate('LoginScreen')
+                            onPress: () => navigation.navigate('Login')
           }
         ]
       );
@@ -63,7 +63,7 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ navigation 
   };
 
   const handleLogin = () => {
-    navigation.navigate('LoginScreen');
+    navigation.navigate('Login');
   };
 
   return (

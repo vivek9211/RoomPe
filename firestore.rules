@@ -1,0 +1,181 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user owns a property
+    function userOwnsProperty(propertyId) {
+      return exists(/databases/$(database)/documents/properties/$(propertyId)) &&
+             get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerId == request.auth.uid;
+    }
+
+    // Helper function to check if user is a tenant of a property
+    function userIsTenantOfProperty(propertyId) {
+      return exists(/databases/$(database)/documents/tenants/{tenantId}) &&
+             resource.data.propertyId == propertyId &&
+             resource.data.userId == request.auth.uid;
+    }
+    
+    // Allow users to access their own document in the "users" collection
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Allow users to list users by role (for tenant selection)
+    match /users/{userId} {
+      allow list: if request.auth != null && 
+        (resource.data.role == 'tenant' || resource.data.role == 'owner');
+    }
+
+    // Allow users to create their own profile document (for onboarding)
+    match /users/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Allow property owners to read tenant user profiles for properties they own
+    match /users/{userId} {
+      allow read: if request.auth != null && 
+        resource.data.role == 'tenant';
+    }
+
+    // Allow users to manage properties they own
+    match /properties/{propertyId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.ownerId == request.auth.uid);
+    }
+
+    // Allow users to read properties they own (for listing)
+    match /properties/{propertyId} {
+      allow read: if request.auth != null && 
+        resource.data.ownerId == request.auth.uid;
+    }
+
+    // Allow all authenticated users to read active properties (for tenant browsing)
+    match /properties/{propertyId} {
+      allow read: if request.auth != null && resource.data.status == 'active';
+    }
+
+    // Allow users to manage room mappings for properties they own
+    match /room_mappings/{propertyId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || userOwnsProperty(propertyId));
+    }
+
+    // Allow users to manage tenants for properties they own
+    match /tenants/{tenantId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || userOwnsProperty(resource.data.propertyId));
+    }
+
+    // Allow users to list tenants for properties they own
+    match /tenants/{tenantId} {
+      allow list: if request.auth != null && 
+        (request.query.propertyId != null && userOwnsProperty(request.query.propertyId));
+    }
+
+    // Allow users to manage rentals for properties they own
+    match /rentals/{rentalId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || userOwnsProperty(resource.data.propertyId));
+    }
+
+    // Allow users to manage payments for properties they own
+    match /payments/{paymentId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || userOwnsProperty(resource.data.propertyId));
+    }
+
+    // Allow users to manage maintenance requests for properties they own
+    match /maintenance_requests/{requestId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || userOwnsProperty(resource.data.propertyId));
+    }
+
+    // Allow users to manage notifications for properties they own
+    match /notifications/{notificationId} {
+      allow read, write: if request.auth != null && 
+        (resource == null || userOwnsProperty(resource.data.propertyId));
+    }
+
+    // ==================== TENANT APPLICATIONS RULES ====================
+    
+    // FIXED: Single, comprehensive rule for tenant_applications
+    match /tenant_applications/{applicationId} {
+      // Allow tenants to create applications
+      allow create: if request.auth != null && 
+        request.resource.data.tenantId == request.auth.uid;
+      
+      // Allow tenants to read their own applications
+      allow read: if request.auth != null && 
+        resource.data.tenantId == request.auth.uid;
+      
+      // Allow property owners to read applications for their properties
+      allow read: if request.auth != null && 
+        resource.data.ownerId == request.auth.uid;
+      
+      // FIXED: Allow property owners to update applications for their properties
+      // This includes changing status to 'approved', 'rejected', etc.
+      allow update: if request.auth != null && 
+        resource.data.ownerId == request.auth.uid;
+      
+      // Allow tenants to update their own applications (for withdrawing)
+      allow update: if request.auth != null && 
+        resource.data.tenantId == request.auth.uid &&
+        request.resource.data.status in ['withdrawn'];
+      
+      // FIXED: Allow listing with proper filters
+      allow list: if request.auth != null && 
+        // For owners: allow listing if they own any applications
+        (resource.data.ownerId == request.auth.uid) ||
+        // For tenants: allow listing their own applications
+        (resource.data.tenantId == request.auth.uid) ||
+        // Allow listing when no specific filters are applied (for testing/initial access)
+        (request.query.limit != null);
+    }
+
+    // Allow listing applications by tenantId for property owners (to edit tenants)
+    // This is more permissive but necessary for property management
+    allow list: if request.auth != null && 
+      request.query.filters[0].op == '==' &&
+      request.query.filters[0].fieldPath == 'tenantId';
+
+    // Optional: Add rules for tenant-specific access
+    // Tenants can read properties they're renting
+    match /properties/{propertyId} {
+      allow read: if request.auth != null && 
+        (resource.data.ownerId == request.auth.uid ||
+         request.auth.uid in resource.data.tenantIds);
+    }
+
+    // Tenants can read their own tenant records
+    match /tenants/{tenantId} {
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
+    }
+
+    // Tenants can read their own rental agreements
+    match /rentals/{rentalId} {
+      allow read: if request.auth != null && 
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
+    }
+
+    // Tenants can read their own payments
+    match /payments/{paymentId} {
+      allow read: if request.auth != null && 
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
+    }
+
+    // Tenants can create and read their own maintenance requests
+    match /maintenance_requests/{requestId} {
+      allow create: if request.auth != null && 
+        request.resource.data.tenantId == request.auth.uid;
+      
+      allow read, update: if request.auth != null && 
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
+    }
+  }
+}

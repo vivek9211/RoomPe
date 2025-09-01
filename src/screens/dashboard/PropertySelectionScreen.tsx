@@ -117,6 +117,14 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
     navigation.navigate('RoomMapping', { property });
   };
 
+  const handleViewDetails = (property: Property) => {
+    navigation.navigate('PropertyDetail', { property });
+  };
+
+  const handleRoomManagement = (property: Property) => {
+    navigation.navigate('RoomManagement', { property });
+  };
+
   const handleDeleteProperty = (property: Property) => {
     Alert.alert(
       'Delete Property',
@@ -194,27 +202,43 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
         </View>
       </View>
       
-      {/* Property Actions */}
-      <View style={styles.propertyActions}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleEditProperty(property)}
-        >
-          <Text style={styles.actionButtonText}>✏️ Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleRoomMapping(property)}
-        >
-          <Text style={styles.actionButtonText}>🏠 Room Mapping</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDeleteProperty(property)}
-        >
-          <Text style={styles.actionButtonText}>🗑️ Delete</Text>
-        </TouchableOpacity>
-      </View>
+             {/* Property Actions */}
+       <View style={styles.propertyActions}>
+         <View style={styles.actionRow}>
+           <TouchableOpacity 
+             style={styles.actionButton}
+             onPress={() => handleViewDetails(property)}
+           >
+             <Text style={styles.actionButtonText}>View Details</Text>
+           </TouchableOpacity>
+           <TouchableOpacity 
+             style={styles.actionButton}
+             onPress={() => handleEditProperty(property)}
+           >
+             <Text style={styles.actionButtonText}>Edit</Text>
+           </TouchableOpacity>
+           <TouchableOpacity 
+             style={styles.actionButton}
+             onPress={() => handleRoomMapping(property)}
+           >
+             <Text style={styles.actionButtonText}>Floors</Text>
+           </TouchableOpacity>
+         </View>
+         <View style={styles.actionRow}>
+           <TouchableOpacity 
+             style={styles.actionButton}
+             onPress={() => handleRoomManagement(property)}
+           >
+             <Text style={styles.actionButtonText}>Room Management</Text>
+           </TouchableOpacity>
+           <TouchableOpacity 
+             style={[styles.actionButton, styles.deleteButton]}
+             onPress={() => handleDeleteProperty(property)}
+           >
+             <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+           </TouchableOpacity>
+         </View>
+       </View>
     </TouchableOpacity>
   );
 
@@ -234,7 +258,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Switch Property</Text>
+        <Text style={styles.headerTitle}>Properties</Text>
       </View>
 
       {/* Search Bar */}
@@ -243,7 +267,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search Property"
+            placeholder="Search properties..."
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -361,14 +385,14 @@ const styles = StyleSheet.create({
   },
   propertyCard: {
     backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
+    borderRadius: dimensions.borderRadius.lg,
     padding: dimensions.spacing.lg,
     marginBottom: dimensions.spacing.md,
     shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
   },
   propertyHeader: {
     flexDirection: 'row',
@@ -383,15 +407,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusTag: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: dimensions.spacing.sm,
-    paddingVertical: dimensions.spacing.xs,
-    borderRadius: dimensions.borderRadius.sm,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
   },
   statusText: {
-    color: colors.white,
+    color: colors.primary,
     fontSize: fonts.sm,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   propertyAddress: {
     flexDirection: 'row',
@@ -473,12 +499,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   selectedStatusTag: {
-    backgroundColor: colors.success,
+    backgroundColor: '#F0FDF4',
+    borderColor: '#86EFAC',
   },
   selectedStatusText: {
-    color: colors.white,
+    color: colors.success,
     fontSize: fonts.sm,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   loadingState: {
     alignItems: 'center',
@@ -489,29 +516,43 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   propertyActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: dimensions.spacing.md,
+    marginTop: dimensions.spacing.lg,
     paddingTop: dimensions.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.lightGray,
+    borderTopColor: '#F3F4F6',
     gap: dimensions.spacing.sm,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: dimensions.spacing.sm,
   },
   actionButton: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: '#F8FAFC',
     paddingVertical: dimensions.spacing.sm,
-    paddingHorizontal: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.sm,
     borderRadius: dimensions.borderRadius.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    height: 40,
+    marginHorizontal: dimensions.spacing.xs,
   },
   deleteButton: {
-    backgroundColor: colors.error,
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
   },
   actionButtonText: {
-    color: colors.white,
+    color: colors.textPrimary,
     fontSize: fonts.sm,
     fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  deleteButtonText: {
+    color: '#DC2626',
   },
 });
 

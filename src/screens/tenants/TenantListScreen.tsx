@@ -14,14 +14,25 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
-import { Tenant, TenantStatus } from '../../types/tenant.types';
+import { Tenant, TenantStatus, TenantApplication, TenantApplicationStatus } from '../../types/tenant.types';
 import { useTenants } from '../../hooks/useTenants';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProperty } from '../../contexts/PropertyContext';
 import { firestoreService } from '../../services/firestore';
+
+interface TenantWithUserData extends Tenant {
+  userProfile?: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
+  application?: TenantApplication;
+}
 
 const TenantListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  const { selectedProperty: dashboardSelectedProperty } = useProperty();
   const { 
     tenants, 
     loading, 
@@ -29,25 +40,47 @@ const TenantListScreen: React.FC = () => {
     stats,
     getTenantsByProperty, 
     getTenantStats,
-    clearError 
+    clearError,
+    getAllTenantsForOwner
   } = useTenants();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<TenantStatus | 'all'>('all');
+
   const [refreshing, setRefreshing] = useState(false);
   const [availableProperties, setAvailableProperties] = useState<any[]>([]);
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
+  const [tenantsWithUserData, setTenantsWithUserData] = useState<TenantWithUserData[]>([]);
+  const [tenantApplications, setTenantApplications] = useState<TenantApplication[]>([]);
+
+  // Auto-select property from dashboard when available
+  useEffect(() => {
+    if (dashboardSelectedProperty) {
+      setSelectedProperty(dashboardSelectedProperty.id);
+    }
+  }, [dashboardSelectedProperty]);
+
+  // Load tenants when selectedProperty changes
+  useEffect(() => {
+    if (user && selectedProperty) {
+      loadTenants();
+      loadStats();
+    }
+  }, [selectedProperty, user]);
 
   // Load tenants when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        loadAvailableProperties();
-        loadTenants();
-        loadStats();
+        const loadData = async () => {
+          await loadAvailableProperties();
+          await loadTenantApplications();
+          await loadTenants();
+          await loadStats();
+        };
+        loadData();
       }
-    }, [user, selectedProperty])
+    }, [user])
   );
 
   const loadAvailableProperties = async () => {
@@ -61,12 +94,30 @@ const TenantListScreen: React.FC = () => {
     }
   };
 
+  const loadTenantApplications = async () => {
+    try {
+      if (user) {
+        const applications = await firestoreService.getAllTenantApplicationsByOwner(user.uid);
+        setTenantApplications(applications);
+      }
+    } catch (error) {
+      console.error('Error loading tenant applications:', error);
+    }
+  };
+
   const loadTenants = async () => {
     if (selectedProperty) {
       await getTenantsByProperty(selectedProperty);
     } else {
-      // Clear tenants when no property is selected
-      // TODO: Implement loading tenants for all user properties
+      // Load all tenants for the owner when no property is selected
+      try {
+        if (user && availableProperties.length > 0) {
+          const propertyIds = availableProperties.map(property => property.id);
+          await getAllTenantsForOwner(propertyIds);
+        }
+      } catch (error) {
+        console.error('Error loading all tenants:', error);
+      }
     }
   };
 
@@ -79,31 +130,112 @@ const TenantListScreen: React.FC = () => {
     }
   };
 
+  // Fetch user profiles for tenants and combine with application data
+  useEffect(() => {
+    const fetchTenantsWithUserData = async () => {
+      if (!tenants.length) {
+        setTenantsWithUserData([]);
+        return;
+      }
+
+      try {
+        const tenantsWithData: TenantWithUserData[] = [];
+
+        for (const tenant of tenants) {
+          // Find the corresponding application
+          const application = tenantApplications.find(app => 
+            app.tenantId === tenant.userId && app.propertyId === tenant.propertyId
+          );
+
+          // Fetch user profile
+          let userProfile = null;
+          try {
+            userProfile = await firestoreService.getUserProfile(tenant.userId);
+          } catch (error) {
+            console.error('Error fetching user profile for tenant:', tenant.userId, error);
+          }
+
+          tenantsWithData.push({
+            ...tenant,
+            userProfile: userProfile ? {
+              name: userProfile.name || 'Unknown User',
+              email: userProfile.email || '',
+              phone: userProfile.phone || '',
+            } : undefined,
+            application: application,
+          });
+        }
+
+        setTenantsWithUserData(tenantsWithData);
+      } catch (error) {
+        console.error('Error fetching tenants with user data:', error);
+      }
+    };
+
+    fetchTenantsWithUserData();
+  }, [tenants, tenantApplications]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await Promise.all([loadTenants(), loadStats()]);
+      await Promise.all([loadTenants(), loadStats(), loadTenantApplications()]);
     } finally {
       setRefreshing(false);
     }
   };
 
-  const filteredTenants = tenants.filter(tenant => {
-    // Filter by status
-    if (filterStatus !== 'all' && tenant.status !== filterStatus) {
+  const filteredTenants = tenantsWithUserData.filter(tenant => {
+    // Filter by property if selected
+    if (selectedProperty && tenant.propertyId !== selectedProperty) {
       return false;
     }
     
-    // Filter by search term (if we had user data, we could search by name/email)
-    if (searchTerm && !tenant.userId.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
+    // Only show approved tenants
+    if (tenant.application) {
+      if (tenant.application.status !== TenantApplicationStatus.APPROVED) {
+        return false;
+      }
+    } else {
+      // If no application exists, only show active tenants
+      if (tenant.status !== TenantStatus.ACTIVE) {
+        return false;
+      }
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const userName = tenant.userProfile?.name?.toLowerCase() || '';
+      const userEmail = tenant.userProfile?.email?.toLowerCase() || '';
+      const tenantId = tenant.userId.toLowerCase();
+      
+      if (!userName.includes(searchLower) && 
+          !userEmail.includes(searchLower) && 
+          !tenantId.includes(searchLower)) {
+        return false;
+      }
     }
     
     return true;
   });
 
-  const getStatusColor = (status: TenantStatus) => {
-    switch (status) {
+  const getStatusColor = (tenant: TenantWithUserData) => {
+    // Check application status first
+    if (tenant.application) {
+      switch (tenant.application.status) {
+        case TenantApplicationStatus.APPROVED:
+          return colors.success;
+        case TenantApplicationStatus.PENDING:
+          return colors.warning;
+        case TenantApplicationStatus.REJECTED:
+          return colors.error;
+        case TenantApplicationStatus.WITHDRAWN:
+          return colors.textMuted;
+      }
+    }
+    
+    // Fall back to tenant status
+    switch (tenant.status) {
       case TenantStatus.ACTIVE:
         return colors.success;
       case TenantStatus.PENDING:
@@ -117,8 +249,23 @@ const TenantListScreen: React.FC = () => {
     }
   };
 
-  const getStatusText = (status: TenantStatus) => {
-    switch (status) {
+  const getStatusText = (tenant: TenantWithUserData) => {
+    // Check application status first
+    if (tenant.application) {
+      switch (tenant.application.status) {
+        case TenantApplicationStatus.APPROVED:
+          return 'Approved';
+        case TenantApplicationStatus.PENDING:
+          return 'Pending';
+        case TenantApplicationStatus.REJECTED:
+          return 'Rejected';
+        case TenantApplicationStatus.WITHDRAWN:
+          return 'Withdrawn';
+      }
+    }
+    
+    // Fall back to tenant status
+    switch (tenant.status) {
       case TenantStatus.ACTIVE:
         return 'Active';
       case TenantStatus.PENDING:
@@ -132,7 +279,7 @@ const TenantListScreen: React.FC = () => {
       case TenantStatus.EVICTED:
         return 'Evicted';
       default:
-        return status;
+        return tenant.status;
     }
   };
 
@@ -140,15 +287,15 @@ const TenantListScreen: React.FC = () => {
     navigation.navigate('AddTenant');
   };
 
-  const handleTenantPress = (tenant: Tenant) => {
+  const handleTenantPress = (tenant: TenantWithUserData) => {
     navigation.navigate('TenantDetail', { tenantId: tenant.id });
   };
 
-  const handleEditTenant = (tenant: Tenant) => {
+  const handleEditTenant = (tenant: TenantWithUserData) => {
     navigation.navigate('EditTenant', { tenantId: tenant.id });
   };
 
-  const handleDeleteTenant = (tenant: Tenant) => {
+  const handleDeleteTenant = (tenant: TenantWithUserData) => {
     Alert.alert(
       'Delete Tenant',
       `Are you sure you want to delete this tenant? This action cannot be undone.`,
@@ -166,18 +313,25 @@ const TenantListScreen: React.FC = () => {
     );
   };
 
-  const renderTenantItem = ({ item }: { item: Tenant }) => (
+  const renderTenantItem = ({ item }: { item: TenantWithUserData }) => (
     <TouchableOpacity 
       style={styles.tenantCard}
       onPress={() => handleTenantPress(item)}
     >
       <View style={styles.tenantHeader}>
         <View style={styles.tenantInfo}>
-          <Text style={styles.tenantName}>Tenant #{item.userId.slice(-6)}</Text>
-          <Text style={styles.tenantProperty}>Property: {item.propertyId.slice(-6)}</Text>
+          <Text style={styles.tenantName}>
+            {item.userProfile?.name || `Tenant #${item.userId.slice(-6)}`}
+          </Text>
+          <Text style={styles.tenantProperty}>
+            Property: {availableProperties.find(p => p.id === item.propertyId)?.name || item.propertyId.slice(-6)}
+          </Text>
+          {item.userProfile?.email && (
+            <Text style={styles.tenantEmail}>{item.userProfile.email}</Text>
+          )}
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item) }]}>
+          <Text style={styles.statusText}>{getStatusText(item)}</Text>
         </View>
       </View>
       
@@ -196,6 +350,12 @@ const TenantListScreen: React.FC = () => {
             {item.agreementStart?.toDate?.().toLocaleDateString()} - {item.agreementEnd?.toDate?.().toLocaleDateString()}
           </Text>
         </View>
+        {item.application?.requestedRent && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Requested Rent:</Text>
+            <Text style={styles.detailValue}>₹{item.application.requestedRent.toLocaleString()}</Text>
+          </View>
+        )}
       </View>
       
       <View style={styles.tenantActions}>
@@ -215,68 +375,9 @@ const TenantListScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const renderStatsCard = () => (
-    <View style={styles.statsCard}>
-      <Text style={styles.statsTitle}>Tenant Overview</Text>
-      <View style={styles.statsGrid}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats?.totalTenants || 0}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats?.activeTenants || 0}</Text>
-          <Text style={styles.statLabel}>Active</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats?.pendingTenants || 0}</Text>
-          <Text style={styles.statLabel}>Pending</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{stats?.occupancyRate?.toFixed(1) || 0}%</Text>
-          <Text style={styles.statLabel}>Occupancy</Text>
-        </View>
-      </View>
-    </View>
-  );
 
-  const renderFilterChips = () => (
-    <View style={styles.filterContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === 'all' && styles.filterChipActive]}
-          onPress={() => setFilterStatus('all')}
-        >
-          <Text style={[styles.filterChipText, filterStatus === 'all' && styles.filterChipTextActive]}>
-            All
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === TenantStatus.ACTIVE && styles.filterChipActive]}
-          onPress={() => setFilterStatus(TenantStatus.ACTIVE)}
-        >
-          <Text style={[styles.filterChipText, filterStatus === TenantStatus.ACTIVE && styles.filterChipTextActive]}>
-            Active
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === TenantStatus.PENDING && styles.filterChipActive]}
-          onPress={() => setFilterStatus(TenantStatus.PENDING)}
-        >
-          <Text style={[styles.filterChipText, filterStatus === TenantStatus.PENDING && styles.filterChipTextActive]}>
-            Pending
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === TenantStatus.LEFT && styles.filterChipActive]}
-          onPress={() => setFilterStatus(TenantStatus.LEFT)}
-        >
-          <Text style={[styles.filterChipText, filterStatus === TenantStatus.LEFT && styles.filterChipTextActive]}>
-            Left
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  );
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -322,11 +423,9 @@ const TenantListScreen: React.FC = () => {
         />
       </View>
 
-      {/* Stats Card */}
-      {stats && renderStatsCard()}
 
-      {/* Filter Chips */}
-      {renderFilterChips()}
+
+
 
       {/* Tenants List */}
       <FlatList
@@ -474,64 +573,6 @@ const styles = StyleSheet.create({
     fontSize: fonts.md,
     color: colors.textPrimary,
   },
-  statsCard: {
-    backgroundColor: colors.white,
-    marginHorizontal: dimensions.spacing.lg,
-    marginVertical: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.lg,
-    padding: dimensions.spacing.lg,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statsTitle: {
-    fontSize: fonts.lg,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.md,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statNumber: {
-    fontSize: fonts.xl,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  statLabel: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-    marginTop: dimensions.spacing.xs,
-  },
-  filterContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.sm,
-  },
-  filterChip: {
-    backgroundColor: colors.lightGray,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: 20,
-    marginRight: dimensions.spacing.sm,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-  },
-  filterChipText: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: colors.white,
-  },
   listContainer: {
     paddingHorizontal: dimensions.spacing.lg,
     paddingBottom: dimensions.spacing.lg,
@@ -562,6 +603,11 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   tenantProperty: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+    marginTop: dimensions.spacing.xs,
+  },
+  tenantEmail: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
     marginTop: dimensions.spacing.xs,

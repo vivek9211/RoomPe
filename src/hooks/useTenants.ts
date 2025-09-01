@@ -17,6 +17,7 @@ interface UseTenantsReturn {
   deleteTenant: (tenantId: string) => Promise<void>;
   getTenantById: (tenantId: string) => Promise<void>;
   getTenantsByProperty: (propertyId: string) => Promise<void>;
+  getAllTenantsForOwner: (propertyIds: string[]) => Promise<void>;
   getTenantsWithFilters: (filters: TenantFilters) => Promise<void>;
   getTenantStats: (propertyId?: string) => Promise<void>;
   searchTenants: (searchTerm: string, propertyId?: string) => Promise<void>;
@@ -144,6 +145,21 @@ export const useTenants = (): UseTenantsReturn => {
     }
   }, []);
 
+  const getAllTenantsForOwner = useCallback(async (propertyIds: string[]): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const tenantsData = await tenantApiService.getAllTenantsForOwner(propertyIds);
+      setTenants(tenantsData);
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch tenants';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const getTenantsWithFilters = useCallback(async (filters: TenantFilters): Promise<void> => {
     try {
       setLoading(true);
@@ -217,6 +233,7 @@ export const useTenants = (): UseTenantsReturn => {
     deleteTenant,
     getTenantById,
     getTenantsByProperty,
+    getAllTenantsForOwner,
     getTenantsWithFilters,
     getTenantStats,
     searchTenants,

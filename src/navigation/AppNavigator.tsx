@@ -27,6 +27,7 @@ import PropertySelectionScreen from '../screens/dashboard/PropertySelectionScree
 // Property Screens
 import PropertyListScreen from '../screens/properties/PropertyListScreen';
 import PropertyDetailScreen from '../screens/properties/PropertyDetailScreen';
+import AssignedPropertyDetailScreen from '../screens/properties/AssignedPropertyDetailScreen';
 import AddPropertyScreen from '../screens/properties/AddPropertyScreen';
 import EditPropertyScreen from '../screens/properties/EditPropertyScreen';
 
@@ -44,6 +45,8 @@ import TenantListScreen from '../screens/tenants/TenantListScreen';
 import TenantDetailScreen from '../screens/tenants/TenantDetailScreen';
 import AddTenantScreen from '../screens/tenants/AddTenantScreen';
 import EditTenantScreen from '../screens/tenants/EditTenantScreen';
+import TenantApplicationsScreen from '../screens/tenants/TenantApplicationsScreen';
+
 
 // Payment Screens
 import PaymentListScreen from '../screens/payments/PaymentListScreen';
@@ -62,6 +65,10 @@ import FinancialReportScreen from '../screens/reports/FinancialReportScreen';
 // Settings Screens
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import ProfileScreen from '../screens/settings/ProfileScreen';
+import TenantSettingsScreen from '../screens/settings/TenantSettingsScreen';
+import OwnerSettingsScreen from '../screens/settings/OwnerSettingsScreen';
+import AssignPropertyScreen from '../screens/settings/AssignPropertyScreen';
+import NotificationSettingsScreen from '../screens/settings/NotificationSettingsScreen';
 
 // Analytics Screen
 import AnalyticsScreen from '../screens/dashboard/AnalyticsScreen';
@@ -98,16 +105,6 @@ const OwnerTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="Properties"
-        component={PropertyListScreen}
-        options={{
-          tabBarLabel: 'Properties',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>🏢</Text>
-          ),
-        }}
-      />
-      <Tab.Screen
         name="Tenants"
         component={TenantListScreen}
         options={{
@@ -134,6 +131,16 @@ const OwnerTabNavigator = () => {
           tabBarLabel: 'Analytics',
           tabBarIcon: ({ color, size }) => (
             <Text style={{ color, fontSize: size }}>📊</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={OwnerSettingsScreen}
+        options={{
+          tabBarLabel: 'Settings',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ color, fontSize: size }}>⚙️</Text>
           ),
         }}
       />
@@ -191,7 +198,7 @@ const TenantTabNavigator = () => {
       />
       <Tab.Screen
         name="Settings"
-        component={SettingsScreen}
+        component={TenantSettingsScreen}
         options={{
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
@@ -223,6 +230,7 @@ const AppNavigator = () => {
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
             <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           </>
         ) : !userProfile ? (
           // Loading user profile
@@ -230,6 +238,9 @@ const AppNavigator = () => {
         ) : !userProfile.role ? (
           // Role Selection - User authenticated but no role assigned
           <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+        ) : !userProfile.emailVerified ? (
+          // Email Verification - User authenticated but email not verified
+          <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
         ) : userProfile.role === 'owner' ? (
           // Owner Stack - User has owner role, show owner dashboard
           <>
@@ -250,6 +261,7 @@ const AppNavigator = () => {
             <Stack.Screen name="TenantDetail" component={TenantDetailScreen} />
             <Stack.Screen name="AddTenant" component={AddTenantScreen} />
             <Stack.Screen name="EditTenant" component={EditTenantScreen} />
+            <Stack.Screen name="TenantApplications" component={TenantApplicationsScreen} />
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="AddPayment" component={AddPaymentScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
@@ -263,9 +275,13 @@ const AppNavigator = () => {
           // Tenant Stack - User has tenant role, show tenant dashboard
           <>
             <Stack.Screen name="TenantTabs" component={TenantTabNavigator} />
+            <Stack.Screen name="AssignedPropertyDetail" component={AssignedPropertyDetailScreen} />
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
+
+            <Stack.Screen name="AssignProperty" component={AssignPropertyScreen} />
+            <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           </>

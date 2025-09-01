@@ -121,6 +121,37 @@ class TenantApiService {
   }
 
   /**
+   * Get all tenants for an owner across all their properties
+   * @param propertyIds - Array of property IDs owned by the user
+   * @returns Array of tenants for all properties
+   */
+  async getAllTenantsForOwner(propertyIds: string[]): Promise<Tenant[]> {
+    try {
+      if (propertyIds.length === 0) {
+        return [];
+      }
+
+      const tenants: Tenant[] = [];
+      
+      // Get tenants for each property
+      for (const propertyId of propertyIds) {
+        const propertyTenants = await this.getTenantsByProperty(propertyId);
+        tenants.push(...propertyTenants);
+      }
+
+      // Sort by creation date (newest first)
+      return tenants.sort((a, b) => {
+        const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds || 0;
+        return bTime - aTime;
+      });
+    } catch (error) {
+      console.error('Error fetching all tenants for owner:', error);
+      throw new Error('Failed to fetch tenants');
+    }
+  }
+
+  /**
    * Get tenants with filters
    * @param filters - Filter criteria
    * @returns Array of filtered tenants

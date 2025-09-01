@@ -92,7 +92,9 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
         userType: isOwner ? 'Owner' : 'Tenant' 
       });
       
-      navigation.navigate('EmailVerification');
+      // Don't navigate here - let the AppNavigator handle the routing
+      // The user will be automatically redirected to EmailVerification if needed
+      // or to their dashboard if email verification is not required
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message);
     } finally {
@@ -136,14 +138,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
                 onPress: () => {
                   // Sign out the Google user since they should use existing account
                   auth().signOut();
-                  navigation.navigate('LoginScreen');
+                  navigation.navigate('Login');
                 }
               }
             ]
           );
         } else {
-          // User exists but hasn't completed onboarding, go to onboarding
-          navigation.navigate('Onboarding');
+          // User exists but hasn't completed onboarding, let AppNavigator handle routing
+          console.log('User exists but onboarding not completed - letting AppNavigator handle routing');
         }
       } else {
         // New user or incomplete profile, go to RoleSelection
@@ -158,7 +160,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   };
 
   const handleLogin = () => {
-    navigation.navigate('LoginScreen');
+    navigation.navigate('Login');
   };
 
   const handleBack = () => {

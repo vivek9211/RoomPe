@@ -36,7 +36,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const fetchUserProfile = async (uid: string) => {
     try {
       const profile = await firestoreService.getUserProfile(uid);
-      setUserProfile(profile);
+      
+      // Handle migration for existing users who don't have onboardingCompleted field
+      if (profile && profile.role && profile.onboardingCompleted === undefined) {
+        try {
+          await firestoreService.updateUserProfile(uid, { onboardingCompleted: true });
+          // Update the profile with the new field
+          const updatedProfile = await firestoreService.getUserProfile(uid);
+          setUserProfile(updatedProfile);
+        } catch (e) {
+          console.warn('Failed to update onboarding status for existing user:', e);
+          setUserProfile(profile);
+        }
+      } else {
+        setUserProfile(profile);
+      }
     } catch (error) {
       console.error('Error fetching user profile:', error);
       setUserProfile(null);
@@ -107,6 +121,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         name,
         phone,
         role: role as any,
+        onboardingCompleted: true,
       });
 
       // Send email verification after successful signup

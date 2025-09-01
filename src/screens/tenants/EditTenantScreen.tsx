@@ -13,9 +13,11 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
-import { Tenant, TenantStatus, UpdateTenantData } from '../../types/tenant.types';
+import { Tenant, TenantStatus, UpdateTenantData, TenantApplication, TenantApplicationStatus } from '../../types/tenant.types';
 import { useTenants } from '../../hooks/useTenants';
 import { useAuth } from '../../contexts/AuthContext';
+import { tenantApiService } from '../../services/api/tenantApi';
+import { firestoreService } from '../../services/firestore';
 import firestore from '@react-native-firebase/firestore';
 
 interface EditTenantScreenProps {
@@ -23,15 +25,25 @@ interface EditTenantScreenProps {
   route: any;
 }
 
+interface TenantWithUserData extends Tenant {
+  userProfile?: {
+    name: string;
+    email: string;
+    phone?: string;
+  };
+  application?: TenantApplication;
+}
+
 const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }) => {
   const { tenantId } = route.params || {};
   const { getTenantById, updateTenant, loading, error, clearError } = useTenants();
   const { user } = useAuth();
   
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenant, setTenant] = useState<TenantWithUserData | null>(null);
   const [formData, setFormData] = useState<Partial<UpdateTenantData>>({});
   const [agreementStart, setAgreementStart] = useState<Date | null>(null);
   const [agreementEnd, setAgreementEnd] = useState<Date | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -43,10 +55,71 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
 
   const loadTenantDetails = async () => {
     try {
-      await getTenantById(tenantId);
-      // TODO: Set form data from tenant
+      setLoadingData(true);
+      
+      // Get tenant data
+      const tenantData = await tenantApiService.getTenantById(tenantId);
+      if (!tenantData) {
+        throw new Error('Tenant not found');
+      }
+
+      // Get user profile
+      let userProfile = null;
+      try {
+        userProfile = await firestoreService.getUserProfile(tenantData.userId);
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+
+      // Get tenant application
+      let application = null;
+      try {
+        // Skip the problematic tenantId query and go directly to the working approach
+        if (user) {
+          console.log('Getting applications for owner...');
+          const allApplications = await firestoreService.getAllTenantApplicationsByOwner(user.uid);
+          application = allApplications.find((app: any) => 
+            app.tenantId === tenantData.userId && app.propertyId === tenantData.propertyId
+          );
+        }
+      } catch (error) {
+        console.error('Error fetching tenant applications:', error);
+        // Application data is optional, so we can continue without it
+      }
+
+      const tenantWithData: TenantWithUserData = {
+        ...tenantData,
+        userProfile: userProfile ? {
+          name: userProfile.name || 'Unknown User',
+          email: userProfile.email || '',
+          phone: userProfile.phone || '',
+        } : undefined,
+        application: application,
+      };
+
+      setTenant(tenantWithData);
+
+      // Set initial form data
+      setFormData({
+        rent: tenantData.rent,
+        deposit: tenantData.deposit,
+        status: tenantData.status,
+        notes: tenantData.metadata?.notes || '',
+      });
+
+      // Set agreement dates
+      if (tenantData.agreementStart) {
+        setAgreementStart(tenantData.agreementStart.toDate());
+      }
+      if (tenantData.agreementEnd) {
+        setAgreementEnd(tenantData.agreementEnd.toDate());
+      }
+
     } catch (error) {
       console.error('Error loading tenant details:', error);
+      Alert.alert('Error', 'Failed to load tenant details');
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -86,6 +159,11 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
         updateData.agreementEnd = firestore.Timestamp.fromDate(agreementEnd);
       }
 
+      // Update notes directly
+      if (formData.notes !== undefined) {
+        updateData.notes = formData.notes;
+      }
+
       await updateTenant(tenantId, updateData);
       Alert.alert('Success', 'Tenant updated successfully', [
         { text: 'OK', onPress: () => navigation.goBack() }
@@ -96,14 +174,52 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString();
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   const formatCurrency = (amount: number) => {
     return `₹${amount.toLocaleString()}`;
   };
 
-  if (loading && !tenant) {
+  const getStatusColor = (status: TenantStatus) => {
+    switch (status) {
+      case TenantStatus.ACTIVE:
+        return colors.success;
+      case TenantStatus.PENDING:
+        return colors.warning;
+      case TenantStatus.INACTIVE:
+        return colors.error;
+      case TenantStatus.LEFT:
+        return colors.textMuted;
+      default:
+        return colors.textSecondary;
+    }
+  };
+
+  const getStatusText = (status: TenantStatus) => {
+    switch (status) {
+      case TenantStatus.ACTIVE:
+        return 'Active';
+      case TenantStatus.PENDING:
+        return 'Pending';
+      case TenantStatus.INACTIVE:
+        return 'Inactive';
+      case TenantStatus.LEFT:
+        return 'Left';
+      case TenantStatus.SUSPENDED:
+        return 'Suspended';
+      case TenantStatus.EVICTED:
+        return 'Evicted';
+      default:
+        return status;
+    }
+  };
+
+  if (loadingData) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -150,22 +266,38 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Current Information Display */}
+        {/* Tenant Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Current Information</Text>
+          <Text style={styles.sectionTitle}>Tenant Information</Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Tenant ID:</Text>
-              <Text style={styles.infoValue}>#{tenant.userId.slice(-6)}</Text>
+              <Text style={styles.infoLabel}>Name:</Text>
+              <Text style={styles.infoValue}>{tenant.userProfile?.name || 'Unknown'}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Property ID:</Text>
-              <Text style={styles.infoValue}>#{tenant.propertyId.slice(-6)}</Text>
+              <Text style={styles.infoLabel}>Email:</Text>
+              <Text style={styles.infoValue}>{tenant.userProfile?.email || 'N/A'}</Text>
             </View>
+            {tenant.userProfile?.phone && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Phone:</Text>
+                <Text style={styles.infoValue}>{tenant.userProfile.phone}</Text>
+              </View>
+            )}
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Room ID:</Text>
-              <Text style={styles.infoValue}>#{tenant.roomId.slice(-6)}</Text>
+              <Text style={styles.infoLabel}>Status:</Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(tenant.status) }]}>
+                <Text style={styles.statusBadgeText}>{getStatusText(tenant.status)}</Text>
+              </View>
             </View>
+
+          </View>
+        </View>
+
+        {/* Current Financial Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Current Financial Information</Text>
+          <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Current Rent:</Text>
               <Text style={[styles.infoValue, styles.rentValue]}>{formatCurrency(tenant.rent)}</Text>
@@ -173,6 +305,18 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Current Deposit:</Text>
               <Text style={styles.infoValue}>{formatCurrency(tenant.deposit)}</Text>
+            </View>
+            {tenant.application?.requestedRent && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Requested Rent:</Text>
+                <Text style={styles.infoValue}>{formatCurrency(tenant.application.requestedRent)}</Text>
+              </View>
+            )}
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Agreement Period:</Text>
+              <Text style={styles.infoValue}>
+                {tenant.agreementStart?.toDate?.().toLocaleDateString()} - {tenant.agreementEnd?.toDate?.().toLocaleDateString()}
+              </Text>
             </View>
           </View>
         </View>
@@ -207,25 +351,6 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
             />
           </View>
 
-          {/* Agreement Dates */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Agreement Start Date</Text>
-            <TouchableOpacity style={styles.dateInput}>
-              <Text style={agreementStart ? styles.dateValue : styles.datePlaceholder}>
-                {agreementStart ? formatDate(agreementStart) : 'Select start date'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Agreement End Date</Text>
-            <TouchableOpacity style={styles.dateInput}>
-              <Text style={agreementEnd ? styles.dateValue : styles.datePlaceholder}>
-                {agreementEnd ? formatDate(agreementEnd) : 'Select end date'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
           {/* Status */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Status</Text>
@@ -243,7 +368,7 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
                     styles.statusOptionText,
                     formData.status === status && styles.statusOptionTextActive
                   ]}>
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                    {getStatusText(status)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -267,17 +392,23 @@ const EditTenantScreen: React.FC<EditTenantScreenProps> = ({ navigation, route }
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.submitButtonText}>Update Tenant</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.submitButtonContainer}>
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+                         {loading ? (
+               <>
+                 <ActivityIndicator color={colors.white} size="small" />
+                 <Text style={styles.submitButtonText}>Updating...</Text>
+               </>
+             ) : (
+               <Text style={styles.submitButtonText}>Update Tenant</Text>
+             )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Error Message */}
@@ -414,6 +545,16 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '600',
   },
+  statusBadge: {
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: dimensions.borderRadius.sm,
+  },
+  statusBadgeText: {
+    fontSize: fonts.xs,
+    fontWeight: '600',
+    color: colors.white,
+  },
   formGroup: {
     marginBottom: dimensions.spacing.lg,
   },
@@ -436,22 +577,6 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     textAlignVertical: 'top',
-  },
-  dateInput: {
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-  },
-  dateValue: {
-    fontSize: fonts.md,
-    color: colors.textPrimary,
-  },
-  datePlaceholder: {
-    fontSize: fonts.md,
-    color: colors.textMuted,
   },
   statusOptions: {
     flexDirection: 'row',
@@ -478,18 +603,29 @@ const styles = StyleSheet.create({
   statusOptionTextActive: {
     color: colors.white,
   },
+  submitButtonContainer: {
+    marginTop: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.xl,
+    paddingHorizontal: dimensions.spacing.md,
+  },
   submitButton: {
     backgroundColor: colors.primary,
     borderRadius: dimensions.borderRadius.md,
-    paddingVertical: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.lg,
     alignItems: 'center',
-    marginTop: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.xl,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   submitButtonDisabled: {
     backgroundColor: colors.lightGray,
     opacity: 0.6,
+    shadowOpacity: 0.1,
   },
+
   submitButtonText: {
     color: colors.white,
     fontSize: fonts.lg,
@@ -521,3 +657,4 @@ const styles = StyleSheet.create({
 });
 
 export default EditTenantScreen;
+
