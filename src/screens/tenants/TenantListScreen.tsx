@@ -17,6 +17,7 @@ import { colors, fonts, dimensions } from '../../constants';
 import { Tenant, TenantStatus, TenantApplication, TenantApplicationStatus } from '../../types/tenant.types';
 import { useTenants } from '../../hooks/useTenants';
 import { useAuth } from '../../contexts/AuthContext';
+import { useProperty } from '../../contexts/PropertyContext';
 import { firestoreService } from '../../services/firestore';
 
 interface TenantWithUserData extends Tenant {
@@ -31,6 +32,7 @@ interface TenantWithUserData extends Tenant {
 const TenantListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
+  const { selectedProperty: dashboardSelectedProperty } = useProperty();
   const { 
     tenants, 
     loading, 
@@ -38,28 +40,47 @@ const TenantListScreen: React.FC = () => {
     stats,
     getTenantsByProperty, 
     getTenantStats,
-    clearError 
+    clearError,
+    getAllTenantsForOwner
   } = useTenants();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProperty, setSelectedProperty] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<TenantStatus | 'all'>('all');
+
   const [refreshing, setRefreshing] = useState(false);
   const [availableProperties, setAvailableProperties] = useState<any[]>([]);
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
   const [tenantsWithUserData, setTenantsWithUserData] = useState<TenantWithUserData[]>([]);
   const [tenantApplications, setTenantApplications] = useState<TenantApplication[]>([]);
 
+  // Auto-select property from dashboard when available
+  useEffect(() => {
+    if (dashboardSelectedProperty) {
+      setSelectedProperty(dashboardSelectedProperty.id);
+    }
+  }, [dashboardSelectedProperty]);
+
+  // Load tenants when selectedProperty changes
+  useEffect(() => {
+    if (user && selectedProperty) {
+      loadTenants();
+      loadStats();
+    }
+  }, [selectedProperty, user]);
+
   // Load tenants when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        loadAvailableProperties();
-        loadTenantApplications();
-        loadTenants();
-        loadStats();
+        const loadData = async () => {
+          await loadAvailableProperties();
+          await loadTenantApplications();
+          await loadTenants();
+          await loadStats();
+        };
+        loadData();
       }
-    }, [user, selectedProperty])
+    }, [user])
   );
 
   const loadAvailableProperties = async () => {
@@ -88,8 +109,15 @@ const TenantListScreen: React.FC = () => {
     if (selectedProperty) {
       await getTenantsByProperty(selectedProperty);
     } else {
-      // Clear tenants when no property is selected
-      // TODO: Implement loading tenants for all user properties
+      // Load all tenants for the owner when no property is selected
+      try {
+        if (user && availableProperties.length > 0) {
+          const propertyIds = availableProperties.map(property => property.id);
+          await getAllTenantsForOwner(propertyIds);
+        }
+      } catch (error) {
+        console.error('Error loading all tenants:', error);
+      }
     }
   };
 
@@ -157,18 +185,19 @@ const TenantListScreen: React.FC = () => {
   };
 
   const filteredTenants = tenantsWithUserData.filter(tenant => {
-    // Filter by status
-    if (filterStatus !== 'all') {
-      // Check application status for approved tenants
-      if (filterStatus === TenantStatus.ACTIVE) {
-        if (!tenant.application || tenant.application.status !== TenantApplicationStatus.APPROVED) {
-          return false;
-        }
-      } else if (filterStatus === TenantStatus.PENDING) {
-        if (!tenant.application || tenant.application.status !== TenantApplicationStatus.PENDING) {
-          return false;
-        }
-      } else if (tenant.status !== filterStatus) {
+    // Filter by property if selected
+    if (selectedProperty && tenant.propertyId !== selectedProperty) {
+      return false;
+    }
+    
+    // Only show approved tenants
+    if (tenant.application) {
+      if (tenant.application.status !== TenantApplicationStatus.APPROVED) {
+        return false;
+      }
+    } else {
+      // If no application exists, only show active tenants
+      if (tenant.status !== TenantStatus.ACTIVE) {
         return false;
       }
     }
@@ -348,58 +377,7 @@ const TenantListScreen: React.FC = () => {
 
 
 
-  const renderFilterChips = () => (
-    <View style={styles.filterContainer}>
-      <Text style={styles.filterTitle}>Filter by Status</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScrollContent}>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === 'all' && styles.filterChipActive]}
-          onPress={() => setFilterStatus('all')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.filterChipText, filterStatus === 'all' && styles.filterChipTextActive]}>
-            All Tenants
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === TenantStatus.ACTIVE && styles.filterChipActive]}
-          onPress={() => setFilterStatus(TenantStatus.ACTIVE)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.filterChipText, filterStatus === TenantStatus.ACTIVE && styles.filterChipTextActive]}>
-            ✅ Approved
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === TenantStatus.PENDING && styles.filterChipActive]}
-          onPress={() => setFilterStatus(TenantStatus.PENDING)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.filterChipText, filterStatus === TenantStatus.PENDING && styles.filterChipTextActive]}>
-            ⏳ Pending
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === TenantStatus.LEFT && styles.filterChipActive]}
-          onPress={() => setFilterStatus(TenantStatus.LEFT)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.filterChipText, filterStatus === TenantStatus.LEFT && styles.filterChipTextActive]}>
-            🚪 Left
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.filterChip, filterStatus === TenantStatus.INACTIVE && styles.filterChipActive]}
-          onPress={() => setFilterStatus(TenantStatus.INACTIVE)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.filterChipText, filterStatus === TenantStatus.INACTIVE && styles.filterChipTextActive]}>
-            ❌ Inactive
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  );
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -447,8 +425,7 @@ const TenantListScreen: React.FC = () => {
 
 
 
-      {/* Filter Chips */}
-      {renderFilterChips()}
+
 
       {/* Tenants List */}
       <FlatList
@@ -595,51 +572,6 @@ const styles = StyleSheet.create({
     paddingVertical: dimensions.spacing.sm,
     fontSize: fonts.md,
     color: colors.textPrimary,
-  },
-  filterContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
-  },
-  filterTitle: {
-    fontSize: fonts.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.sm,
-  },
-  filterScrollContent: {
-    paddingRight: dimensions.spacing.lg,
-  },
-  filterChip: {
-    backgroundColor: colors.lightGray,
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: 25,
-    marginRight: dimensions.spacing.md,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.3,
-  },
-  filterChipText: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  filterChipTextActive: {
-    color: colors.white,
-    fontWeight: '700',
   },
   listContainer: {
     paddingHorizontal: dimensions.spacing.lg,
