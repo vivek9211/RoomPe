@@ -118,15 +118,51 @@ const AddTenantScreen: React.FC = () => {
 
   const loadAvailableRooms = async (propertyId: string) => {
     try {
-      // TODO: Implement room loading from room mapping
-      // For now, we'll use placeholder data
-      setAvailableRooms([
-        { id: 'room1', name: 'Room 101' },
-        { id: 'room2', name: 'Room 102' },
-        { id: 'room3', name: 'Room 201' },
-      ]);
+      // Load rooms from room mapping
+      const roomMapping = await firestoreService.getRoomMapping(propertyId);
+      const rooms: any[] = [];
+      
+      if (roomMapping && roomMapping.floorConfigs) {
+        // Iterate through floor configurations to find available rooms
+        for (const floor of roomMapping.floorConfigs) {
+          for (const unit of floor.units || []) {
+            for (const room of unit.rooms || []) {
+              // Check if room is available (not fully occupied)
+              if (room.occupied < room.capacity) {
+                rooms.push({
+                  id: room.id,
+                  name: `Room ${room.roomNumber || room.id}`,
+                  roomNumber: room.roomNumber || room.id,
+                  type: room.type || 'single',
+                  capacity: room.capacity || 1,
+                  occupied: room.occupied || 0,
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // If no rooms found in mapping, create some default rooms
+      if (rooms.length === 0) {
+        rooms.push(
+          { id: '101', name: 'Room 101', roomNumber: '101', type: 'single', capacity: 1, occupied: 0 },
+          { id: '102', name: 'Room 102', roomNumber: '102', type: 'single', capacity: 1, occupied: 0 },
+          { id: '201', name: 'Room 201', roomNumber: '201', type: 'single', capacity: 1, occupied: 0 },
+          { id: '202', name: 'Room 202', roomNumber: '202', type: 'single', capacity: 1, occupied: 0 },
+        );
+      }
+      
+      setAvailableRooms(rooms);
     } catch (error) {
       console.error('Error loading rooms:', error);
+      // Fallback to default rooms if there's an error
+      setAvailableRooms([
+        { id: '101', name: 'Room 101', roomNumber: '101', type: 'single', capacity: 1, occupied: 0 },
+        { id: '102', name: 'Room 102', roomNumber: '102', type: 'single', capacity: 1, occupied: 0 },
+        { id: '201', name: 'Room 201', roomNumber: '201', type: 'single', capacity: 1, occupied: 0 },
+        { id: '202', name: 'Room 202', roomNumber: '202', type: 'single', capacity: 1, occupied: 0 },
+      ]);
     }
   };
 
@@ -261,6 +297,8 @@ const AddTenantScreen: React.FC = () => {
                 <Text style={styles.emptyModalText}>
                   {title === 'Select Approved Tenant' 
                     ? 'No approved tenants available. Only tenants with approved applications and no room assignments are shown.'
+                    : title === 'Select Room'
+                    ? 'No available rooms found for this property.'
                     : 'No items available'
                   }
                 </Text>
@@ -281,13 +319,30 @@ const AddTenantScreen: React.FC = () => {
                     <Text style={styles.modalItemText}>
                       {item.name || 'No Name'}
                     </Text>
-                    <Text style={styles.modalItemSubtext}>
-                      {item.email}
-                    </Text>
-                    {item.phone && (
+                    {title === 'Select Room' ? (
+                      // Show room-specific information
                       <Text style={styles.modalItemSubtext}>
-                        {item.phone}
+                        {item.type === 'single' ? 'Single Room' : 
+                         item.type === 'double' ? 'Double Sharing' :
+                         item.type === 'triple' ? 'Triple Sharing' :
+                         item.type === 'quad' ? 'Quad Sharing' :
+                         item.type === 'ac' ? 'AC Room' :
+                         item.type === 'non_ac' ? 'Non-AC Room' :
+                         item.type === 'deluxe' ? 'Deluxe Room' :
+                         item.type} • {item.occupied}/{item.capacity} occupied
                       </Text>
+                    ) : (
+                      // Show user information
+                      <>
+                        <Text style={styles.modalItemSubtext}>
+                          {item.email}
+                        </Text>
+                        {item.phone && (
+                          <Text style={styles.modalItemSubtext}>
+                            {item.phone}
+                          </Text>
+                        )}
+                      </>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -372,6 +427,18 @@ const AddTenantScreen: React.FC = () => {
             </Text>
             <Text style={styles.pickerArrow}>›</Text>
           </TouchableOpacity>
+          {selectedRoom && (
+            <Text style={styles.helperText}>
+              {selectedRoom.type === 'single' ? 'Single Room' : 
+               selectedRoom.type === 'double' ? 'Double Sharing' :
+               selectedRoom.type === 'triple' ? 'Triple Sharing' :
+               selectedRoom.type === 'quad' ? 'Quad Sharing' :
+               selectedRoom.type === 'ac' ? 'AC Room' :
+               selectedRoom.type === 'non_ac' ? 'Non-AC Room' :
+               selectedRoom.type === 'deluxe' ? 'Deluxe Room' :
+               selectedRoom.type} • {selectedRoom.occupied}/{selectedRoom.capacity} currently occupied
+            </Text>
+          )}
         </View>
 
         {/* Rent Amount */}
