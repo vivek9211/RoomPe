@@ -20,6 +20,7 @@ interface InputProps {
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   error?: string;
   disabled?: boolean;
+  required?: boolean;
   style?: ViewStyle;
   inputStyle?: TextStyle;
 }
@@ -34,6 +35,7 @@ const Input: React.FC<InputProps> = ({
   autoCapitalize = 'none',
   error,
   disabled = false,
+  required = false,
   style,
   inputStyle,
 }) => {
@@ -49,7 +51,12 @@ const Input: React.FC<InputProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && (
+        <View style={styles.labelContainer}>
+          <Text style={styles.label}>{label}</Text>
+          {required && <Text style={styles.requiredAsterisk}>*</Text>}
+        </View>
+      )}
       
       <View style={[
         styles.inputContainer,
@@ -96,11 +103,20 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: dimensions.spacing.md,
   },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   label: {
     fontSize: fonts.sm,
     fontWeight: '500' as const,
     color: colors.textPrimary,
     marginBottom: dimensions.spacing.xs,
+  },
+  requiredAsterisk: {
+    color: colors.error,
+    fontSize: fonts.sm,
+    marginLeft: dimensions.spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',

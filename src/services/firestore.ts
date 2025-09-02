@@ -853,8 +853,27 @@ class FirestoreService {
    */
   async createTenantApplication(applicationData: any): Promise<string> {
     try {
+      console.log('Creating tenant application with data:', JSON.stringify(applicationData, null, 2));
+      
+      // Validate required fields
+      if (!applicationData.tenantId || !applicationData.propertyId || !applicationData.ownerId) {
+        console.error('Missing required fields:', {
+          tenantId: applicationData.tenantId,
+          propertyId: applicationData.propertyId,
+          ownerId: applicationData.ownerId
+        });
+        throw new Error('Missing required fields: tenantId, propertyId, or ownerId');
+      }
+
+      // Filter out undefined values to prevent Firestore errors
+      const cleanApplicationData = Object.fromEntries(
+        Object.entries(applicationData).filter(([_, value]) => value !== undefined)
+      );
+
+      console.log('Cleaned application data:', JSON.stringify(cleanApplicationData, null, 2));
+
       const applicationDoc = {
-        ...applicationData,
+        ...cleanApplicationData,
         status: 'pending',
         createdAt: firestore.FieldValue.serverTimestamp(),
         updatedAt: firestore.FieldValue.serverTimestamp(),

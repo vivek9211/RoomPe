@@ -13,7 +13,6 @@ import TenantRegistrationScreen from '../screens/auth/TenantRegistrationScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
-import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
 import LoadingScreen from '../screens/auth/LoadingScreen';
 
 // Onboarding Screens - Only used when explicitly navigating to onboarding
@@ -235,9 +234,6 @@ const AppNavigator = () => {
         ) : !userProfile ? (
           // Loading user profile
           <Stack.Screen name="Loading" component={LoadingScreen} />
-        ) : !userProfile.role ? (
-          // Role Selection - User authenticated but no role assigned
-          <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
         ) : !userProfile.emailVerified ? (
           // Email Verification - User authenticated but email not verified
           <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />

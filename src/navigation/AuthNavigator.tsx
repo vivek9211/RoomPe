@@ -5,7 +5,6 @@ import RegisterScreen from '../screens/auth/RegisterScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 import PhoneVerificationScreen from '../screens/auth/PhoneVerificationScreen';
-import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
 
 const Stack = createStackNavigator();
 
@@ -17,8 +16,7 @@ const AuthNavigator = () => {
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
       <Stack.Screen name="PhoneVerification" component={PhoneVerificationScreen} />
-      <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-      {/** Onboarding removed */}
+      {/** RoleSelection removed - role is now selected during registration */}
     </Stack.Navigator>
   );
 };
