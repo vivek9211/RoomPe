@@ -28,6 +28,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
   const [properties, setProperties] = useState<Property[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  const [roomMappings, setRoomMappings] = useState<{[key: string]: any}>({});
 
   // Load properties and set up real-time listener
   useEffect(() => {
@@ -37,7 +38,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       // Set up real-time listener for properties
       const unsubscribe = firestoreService.onPropertiesByOwnerChange(
         userProfile.uid,
-        (firebaseProperties) => {
+        async (firebaseProperties) => {
           // Convert Firebase data to Property objects
           const properties: Property[] = firebaseProperties.map((firebaseProperty: any) => ({
             id: firebaseProperty.id,
@@ -55,6 +56,9 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           
           setProperties(properties);
           console.log('Properties updated in real-time:', properties);
+          
+          // Load room mappings for updated properties
+          await loadRoomMappings(properties);
         }
       );
       
@@ -91,11 +95,38 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       
       setProperties(properties);
       console.log('Properties loaded from Firebase:', properties);
+      
+      // Load room mappings for all properties
+      await loadRoomMappings(properties);
     } catch (error) {
       console.error('Error loading properties:', error);
       Alert.alert('Error', 'Failed to load properties');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadRoomMappings = async (properties: Property[]) => {
+    try {
+      const mappings: {[key: string]: any} = {};
+      
+      // Load room mapping for each property
+      for (const property of properties) {
+        try {
+          const roomMapping = await firestoreService.getRoomMapping(property.id);
+          if (roomMapping) {
+            mappings[property.id] = roomMapping;
+          }
+        } catch (error) {
+          console.error(`Error loading room mapping for property ${property.id}:`, error);
+          // Continue with other properties even if one fails
+        }
+      }
+      
+      setRoomMappings(mappings);
+      console.log('Room mappings loaded:', mappings);
+    } catch (error) {
+      console.error('Error loading room mappings:', error);
     }
   };
 
@@ -156,6 +187,118 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
     loadProperties();
   };
 
+  const getRoomBedCounts = (property: Property) => {
+    const roomMapping = roomMappings[property.id];
+    
+    if (!roomMapping || !roomMapping.floorConfigs) {
+      // No room mapping exists, show default values
+      return {
+        totalRooms: 0,
+        totalBeds: 0,
+        occupiedRooms: 0,
+        occupiedBeds: 0
+      };
+    }
+
+    let totalRooms = 0;
+    let totalBeds = 0;
+    let occupiedRooms = 0;
+    let occupiedBeds = 0;
+
+    // Calculate totals from floor configurations
+    roomMapping.floorConfigs.forEach((floorConfig: any) => {
+      // Count rooms from roomConfigs (sharing types like single, double, triple, etc.)
+      Object.entries(floorConfig.roomConfigs || {}).forEach(([sharingType, count]: [string, any]) => {
+        const roomCount = count || 0;
+        totalRooms += roomCount;
+        
+        // Calculate beds based on sharing type
+        switch (sharingType) {
+          case 'single':
+            totalBeds += roomCount * 1;
+            break;
+          case 'double':
+            totalBeds += roomCount * 2;
+            break;
+          case 'triple':
+            totalBeds += roomCount * 3;
+            break;
+          case 'four_sharing':
+            totalBeds += roomCount * 4;
+            break;
+          case 'five_sharing':
+            totalBeds += roomCount * 5;
+            break;
+          case 'six_sharing':
+            totalBeds += roomCount * 6;
+            break;
+          case 'seven_sharing':
+            totalBeds += roomCount * 7;
+            break;
+          case 'eight_sharing':
+            totalBeds += roomCount * 8;
+            break;
+          case 'nine_sharing':
+            totalBeds += roomCount * 9;
+            break;
+          default:
+            totalBeds += roomCount * 1; // Default to 1 bed per room
+        }
+      });
+
+      // Count units from unitConfigs (rooms, RK, BHK, studio apartments, etc.)
+      Object.entries(floorConfig.unitConfigs || {}).forEach(([unitType, count]: [string, any]) => {
+        const unitCount = count || 0;
+        totalRooms += unitCount; // Each unit counts as 1 room regardless of type
+        
+        // Calculate beds based on unit type
+        switch (unitType) {
+          case 'room':
+            totalBeds += unitCount * 1; // Default 1 bed per room
+            break;
+          case 'rk':
+            totalBeds += unitCount * 1; // RK typically has 1 bed
+            break;
+          case 'bhk_1':
+            totalBeds += unitCount * 1; // 1 BHK counts as 1 unit, 1 bed
+            break;
+          case 'bhk_2':
+            totalBeds += unitCount * 1; // 2 BHK counts as 1 unit, 1 bed
+            break;
+          case 'bhk_3':
+            totalBeds += unitCount * 1; // 3 BHK counts as 1 unit, 1 bed
+            break;
+          case 'bhk_4':
+            totalBeds += unitCount * 1; // 4 BHK counts as 1 unit, 1 bed
+            break;
+          case 'bhk_5':
+            totalBeds += unitCount * 1; // 5 BHK counts as 1 unit, 1 bed
+            break;
+          case 'bhk_6':
+            totalBeds += unitCount * 1; // 6 BHK counts as 1 unit, 1 bed
+            break;
+          case 'studio_apartment':
+            totalBeds += unitCount * 1; // Studio has 1 bed area
+            break;
+          default:
+            totalBeds += unitCount * 1; // Default to 1 bed per unit
+        }
+      });
+    });
+
+    // For now, we'll use the property's availableRooms to calculate occupied
+    // This could be enhanced to get actual occupancy from room mapping data
+    occupiedRooms = (property.totalRooms || 0) - (property.availableRooms || 0);
+    occupiedBeds = Math.min(occupiedRooms, totalBeds); // Don't exceed total beds
+
+    return {
+      totalRooms,
+      totalBeds,
+      occupiedRooms,
+      occupiedBeds
+    };
+  };
+
   const filteredProperties = properties.filter(property =>
     property.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -191,13 +334,27 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
         <View style={styles.metric}>
           <Text style={styles.metricIcon}>🛏️</Text>
           <Text style={styles.metricText}>
-            Rooms/Beds: <Text style={styles.metricValue}>{property.totalRooms}/{property.totalRooms}</Text>
+            {(() => {
+              const counts = getRoomBedCounts(property);
+              if (counts.totalRooms === 0 && counts.totalBeds === 0) {
+                return 'Rooms 0/0 Beds 0/0';
+              } else {
+                return `Rooms ${counts.occupiedRooms}/${counts.totalRooms} Beds ${counts.occupiedBeds}/${counts.totalBeds}`;
+              }
+            })()}
           </Text>
         </View>
         <View style={styles.metric}>
           <Text style={styles.metricIcon}>👥</Text>
           <Text style={styles.metricText}>
-            Tenants: <Text style={styles.metricValue}>{property.totalRooms - property.availableRooms}</Text>
+            Tenants: <Text style={styles.metricValue}>
+              {(() => {
+                const totalRooms = property.totalRooms || 0;
+                const availableRooms = property.availableRooms || 0;
+                const tenantCount = totalRooms - availableRooms;
+                return isNaN(tenantCount) ? 0 : Math.max(0, tenantCount);
+              })()}
+            </Text>
           </Text>
         </View>
       </View>
