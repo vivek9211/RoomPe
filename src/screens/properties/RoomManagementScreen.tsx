@@ -6,13 +6,8 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   Alert,
   RefreshControl,
-  Modal,
-  FlatList,
-  Image,
-  Switch,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
@@ -185,18 +180,9 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
   const [rooms, setRooms] = useState<RoomWithBeds[]>([]);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'occupied' | 'maintenance' | 'reserved'>('all');
-  const [filterType, setFilterType] = useState<'all' | UnitType | RoomType>('all');
-  const [showAddUnitModal, setShowAddUnitModal] = useState(false);
-  const [showAddRoomModal, setShowAddRoomModal] = useState(false);
-  const [showAssignTenantModal, setShowAssignTenantModal] = useState(false);
-  const [selectedUnit, setSelectedUnit] = useState<UnitWithDetails | null>(null);
-  const [selectedRoom, setSelectedRoom] = useState<RoomWithBeds | null>(null);
-  const [availableTenants, setAvailableTenants] = useState<TenantDisplay[]>([]);
-  const [selectedTenant, setSelectedTenant] = useState<TenantDisplay | null>(null);
-
-  const [showFilters, setShowFilters] = useState(false);
+  const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<UnitType | null>(null);
 
   // Form data
   const [newUnitData, setNewUnitData] = useState({
@@ -222,7 +208,6 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
   useEffect(() => {
     if (property) {
       loadPropertyData();
-      loadAvailableTenants();
     }
   }, [property]);
 
@@ -411,174 +396,15 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
     }
   };
 
-  const loadAvailableTenants = async () => {
-    try {
-      if (!property?.id) return;
-      
-      // Load all tenants for this property
-      const propertyTenants = await tenantApiService.getTenantsByProperty(property.id);
-      
-      // Filter available tenants (not assigned to any unit)
-      const availableTenantsData: TenantDisplay[] = [];
-      
-      for (const tenant of propertyTenants) {
-        try {
-          const user = await firestoreService.getUserProfile(tenant.userId);
-          if (user) {
-            availableTenantsData.push({
-              id: tenant.id,
-              name: user.name || 'Unknown Tenant',
-              phone: user.phone || 'No Phone',
-              email: user.email || 'No Email',
-            });
-          }
-        } catch (error) {
-          console.error('Error loading tenant user details:', error);
-        }
-      }
-      
-      setAvailableTenants(availableTenantsData);
-      console.log('Available tenants loaded:', availableTenantsData.length);
-    } catch (error) {
-      console.error('Error loading available tenants:', error);
-      // Fallback to empty array
-      setAvailableTenants([]);
-    }
-  };
+  // Simplified flow does not preload available tenants
 
   const handleRefresh = () => {
     loadPropertyData();
   };
 
-  const handleAddUnit = async () => {
-    if (!newUnitData.unitNumber || newUnitData.rent <= 0 || !property?.id) {
-      Alert.alert('Error', 'Please fill all required fields');
-      return;
-    }
+  // Add Unit flow removed from simplified UI
 
-    try {
-      const newUnit: UnitWithDetails = {
-        id: Date.now().toString(),
-        floorId: `floor${newUnitData.floorNumber}`,
-        unitNumber: newUnitData.unitNumber,
-        unitType: newUnitData.unitType,
-        sharingType: newUnitData.unitType === UnitType.ROOM ? newUnitData.sharingType : undefined,
-        capacity: newUnitData.capacity,
-        isOccupied: false,
-        tenantIds: [],
-        rent: newUnitData.rent,
-        deposit: newUnitData.deposit,
-        amenities: newUnitData.amenities,
-        status: 'available',
-        currentTenants: [],
-        createdAt: new Date() as any,
-        updatedAt: new Date() as any,
-      };
-
-      // Get current room mapping
-      const roomMapping = await firestoreService.getRoomMapping(property.id);
-      if (roomMapping && roomMapping.floors) {
-        // Find the target floor
-        const targetFloorIndex = roomMapping.floors.findIndex((floor: any) => 
-          floor.floorNumber === newUnitData.floorNumber
-        );
-
-        if (targetFloorIndex !== -1) {
-          // Add unit to the existing floor
-          const updatedFloors = [...roomMapping.floors];
-          updatedFloors[targetFloorIndex] = {
-            ...updatedFloors[targetFloorIndex],
-            units: [...(updatedFloors[targetFloorIndex].units || []), newUnit],
-            totalUnits: (updatedFloors[targetFloorIndex].totalUnits || 0) + 1,
-            vacantUnits: (updatedFloors[targetFloorIndex].vacantUnits || 0) + 1,
-          };
-
-          // Save updated room mapping to Firestore
-          await firestoreService.createOrUpdateRoomMapping(property.id, {
-            totalFloors: roomMapping.totalFloors,
-            floorConfigs: updatedFloors,
-          });
-
-          // Update local state
-          setUnits(prev => [...prev, newUnit]);
-          setNewUnitData({
-            unitNumber: '',
-            unitType: UnitType.ROOM,
-            sharingType: RoomSharingType.SINGLE,
-            capacity: 1,
-            rent: 0,
-            deposit: 0,
-            floorNumber: 1,
-            amenities: [],
-          });
-          setShowAddUnitModal(false);
-          Alert.alert('Success', 'Unit added successfully');
-        } else {
-          Alert.alert('Error', 'Floor not found. Please create the floor first.');
-        }
-      } else {
-        Alert.alert('Error', 'Room mapping not found. Please set up room mapping first.');
-      }
-    } catch (error) {
-      console.error('Error adding unit:', error);
-      Alert.alert('Error', 'Failed to add unit. Please try again.');
-    }
-  };
-
-  const handleAssignTenant = async (unitId: string) => {
-    if (!selectedTenant || !property?.id) {
-      Alert.alert('Error', 'Please select a tenant');
-      return;
-    }
-
-    try {
-      // Update the unit in the room mapping
-      const roomMapping = await firestoreService.getRoomMapping(property.id);
-      if (roomMapping && roomMapping.floors) {
-        const updatedFloors = roomMapping.floors.map((floor: any) => ({
-          ...floor,
-          units: floor.units?.map((unit: any) => 
-            unit.id === unitId
-              ? {
-                  ...unit,
-                  isOccupied: true,
-                  tenantIds: [...(unit.tenantIds || []), selectedTenant.id],
-                  status: 'occupied',
-                  updatedAt: new Date(),
-                }
-              : unit
-          ) || []
-        }));
-
-        // Save updated room mapping to Firestore
-        await firestoreService.createOrUpdateRoomMapping(property.id, {
-          totalFloors: roomMapping.totalFloors,
-          floorConfigs: updatedFloors,
-        });
-
-        // Update local state
-        const updatedUnits = units.map(unit =>
-          unit.id === unitId
-            ? {
-                ...unit,
-                isOccupied: true,
-                tenantIds: [...unit.tenantIds, selectedTenant.id],
-                currentTenants: [...unit.currentTenants, selectedTenant],
-                status: 'occupied' as const,
-              }
-            : unit
-        );
-
-        setUnits(updatedUnits);
-        setSelectedTenant(null);
-        setShowAssignTenantModal(false);
-        Alert.alert('Success', `Tenant ${selectedTenant.name} assigned successfully`);
-      }
-    } catch (error) {
-      console.error('Error assigning tenant:', error);
-      Alert.alert('Error', 'Failed to assign tenant. Please try again.');
-    }
-  };
+  // Assign Tenant flow removed from simplified UI
 
   const handleVacateUnit = (unitId: string) => {
     Alert.alert(
@@ -642,36 +468,9 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
     );
   };
 
-  const handleEditUnit = (unit: UnitWithDetails) => {
-    // TODO: Implement unit editing
-    Alert.alert('Info', 'Unit editing feature coming soon!');
-  };
+  // Edit/Delete flows removed from simplified UI
 
-  const handleDeleteUnit = (unitId: string) => {
-    Alert.alert(
-      'Delete Unit',
-      'Are you sure you want to delete this unit? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setUnits(prev => prev.filter(unit => unit.id !== unitId));
-            Alert.alert('Success', 'Unit deleted successfully');
-          },
-        },
-      ]
-    );
-  };
-
-  const filteredUnits = units.filter(unit => {
-    const matchesSearch = unit.unitNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         unit.currentTenants.some(tenant => tenant.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesStatus = filterStatus === 'all' || unit.status === filterStatus;
-    const matchesType = filterType === 'all' || unit.unitType === filterType;
-    return matchesSearch && matchesStatus && matchesType;
-  });
+  // No filters/search in simplified UI
 
   const getUnitTypeIcon = (unitType: UnitType) => {
     switch (unitType) {
@@ -696,7 +495,7 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
   };
 
   const renderUnitCard = (unit: UnitWithDetails) => (
-    <View key={unit.id} style={styles.unitCard}>
+    <TouchableOpacity key={unit.id} style={styles.unitCard} onPress={() => setSelectedUnitId(unit.id)}>
       <View style={styles.unitHeader}>
         <View style={styles.unitInfo}>
           <Text style={styles.unitIcon}>{getUnitTypeIcon(unit.unitType)}</Text>
@@ -722,71 +521,15 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
         </Text>
       </View>
 
-      {unit.amenities.length > 0 && (
-        <View style={styles.amenitiesContainer}>
-          <Text style={styles.amenitiesTitle}>Amenities:</Text>
-          <View style={styles.amenitiesList}>
-            {unit.amenities.slice(0, 3).map((amenity, index) => (
-              <Text key={index} style={styles.amenityChip}>{amenity}</Text>
-            ))}
-            {unit.amenities.length > 3 && (
-              <Text style={styles.amenityChip}>+{unit.amenities.length - 3} more</Text>
-            )}
-          </View>
-        </View>
-      )}
-      
-      {unit.isOccupied && unit.currentTenants.length > 0 && (
-        <View style={styles.tenantsContainer}>
-          <Text style={styles.tenantsTitle}>Current Tenants:</Text>
-          {unit.currentTenants.map((tenant, index) => (
-            <View key={tenant.id} style={styles.tenantItem}>
-              <Text style={styles.tenantName}>👤 {tenant.name}</Text>
-              <Text style={styles.tenantContact}>{tenant.phone}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-      
-      <View style={styles.unitActions}>
-        {!unit.isOccupied ? (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.assignButton]}
-            onPress={() => {
-              setSelectedUnit(unit);
-              setShowAssignTenantModal(true);
-            }}
-          >
-            <Text style={styles.actionButtonText}>Assign Tenant</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.vacateButton]}
-            onPress={() => handleVacateUnit(unit.id)}
-          >
-            <Text style={styles.actionButtonText}>Vacate Unit</Text>
-          </TouchableOpacity>
-        )}
-        
-        <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={() => handleEditUnit(unit)}
-        >
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDeleteUnit(unit.id)}
-        >
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </TouchableOpacity>
   );
 
-  const renderFloorSection = (floor: Floor) => (
-    <View key={floor.id} style={styles.floorSection}>
+  const renderFloorCard = (floor: Floor) => (
+    <TouchableOpacity key={floor.id} style={styles.unitCard} onPress={() => {
+      setSelectedFloorId(floor.id);
+      setSelectedCategory(null);
+      setSelectedUnitId(null);
+    }}>
       <View style={styles.floorHeader}>
         <Text style={styles.floorTitle}>{floor.floorName}</Text>
         <View style={styles.floorStats}>
@@ -794,16 +537,54 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
             {floor.filledUnits}/{floor.totalUnits} occupied
           </Text>
           <Text style={styles.floorStatText}>
-            {Math.round((floor.filledUnits / floor.totalUnits) * 100)}% occupancy
+            {Math.round((floor.filledUnits / Math.max(1, floor.totalUnits)) * 100)}% occupancy
           </Text>
         </View>
       </View>
-      
-      {units
-        .filter(unit => unit.floorId === floor.id)
-        .map(renderUnitCard)}
-    </View>
+    </TouchableOpacity>
   );
+
+  const renderCategoryCard = (category: UnitType) => (
+    <TouchableOpacity
+      key={category}
+      style={styles.unitCard}
+      onPress={() => {
+        setSelectedCategory(category);
+        setSelectedUnitId(null);
+      }}
+    >
+      <View style={styles.unitHeader}>
+        <View style={styles.unitInfo}>
+          <Text style={styles.unitIcon}>{getUnitTypeIcon(category)}</Text>
+          <View style={styles.unitDetails}>
+            <Text style={styles.unitNumber}>{category.replace('_', ' ').toUpperCase()}</Text>
+            <Text style={styles.unitType}>
+              {category.replace('_', ' ').toUpperCase()}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.unitStatus, { backgroundColor: colors.lightGray }]}>
+          <Text style={styles.unitStatusText}>Category</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const getFloorCategories = (floorId: string) => {
+    const floor = floors.find(f => f.id === floorId);
+    if (!floor) return [];
+
+    const categories: UnitType[] = [];
+    units.forEach(unit => {
+      if (unit.floorId === floorId && !categories.includes(unit.unitType)) {
+        categories.push(unit.unitType);
+      }
+    });
+    return categories;
+  };
+
+  const selectedFloor = floors.find(f => f.id === selectedFloorId) || null;
+  const selectedUnit = units.find(u => u.id === selectedUnitId) || null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -811,122 +592,38 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            if (selectedUnitId) {
+              setSelectedUnitId(null);
+              setSelectedCategory(null);
+              return;
+            }
+            if (selectedCategory) {
+              setSelectedCategory(null);
+              return;
+            }
+            if (selectedFloorId) {
+              setSelectedFloorId(null);
+              return;
+            }
+            navigation.goBack();
+          }}
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Room Management</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddUnitModal(true)}
-        >
-          <Text style={styles.addButtonText}>+ Add Unit</Text>
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {!selectedFloorId && !selectedUnitId && 'Floors'}
+          {selectedFloorId && !selectedCategory && !selectedUnitId && selectedFloor?.floorName}
+          {selectedFloorId && selectedCategory && !selectedUnitId && `${selectedCategory.replace('_', ' ').toUpperCase()} - ${selectedFloor?.floorName}`}
+          {selectedUnitId && `Unit ${selectedUnit?.unitNumber}`}
+        </Text>
+        <View style={{ width: 90 }} />
       </View>
 
-      {/* Search and Filters */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search units or tenants..."
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-        
-        <View style={styles.filterRow}>
-          <TouchableOpacity
-            style={styles.filterToggle}
-            onPress={() => setShowFilters(!showFilters)}
-          >
-            <Text style={styles.filterToggleText}>
-              {showFilters ? 'Hide Filters' : 'Show Filters'}
-            </Text>
-          </TouchableOpacity>
-          
+      {/* Content spacer */}
+      <View style={styles.summaryContainer} />
 
-        </View>
-        
-        {showFilters && (
-          <View style={styles.filtersContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {['all', 'available', 'occupied', 'maintenance', 'reserved'].map(status => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.filterChip,
-                    filterStatus === status && styles.filterChipActive
-                  ]}
-                  onPress={() => setFilterStatus(status as any)}
-                >
-                  <Text style={[
-                    styles.filterChipText,
-                    filterStatus === status && styles.filterChipTextActive
-                  ]}>
-                    {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-              {['all', UnitType.ROOM, UnitType.RK, UnitType.BHK_1, UnitType.BHK_2, UnitType.STUDIO_APARTMENT].map(type => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.filterChip,
-                    filterType === type && styles.filterChipActive
-                  ]}
-                  onPress={() => setFilterType(type as any)}
-                >
-                  <Text style={[
-                    styles.filterChipText,
-                    filterType === type && styles.filterChipTextActive
-                  ]}>
-                    {type === 'all' ? 'All Types' : type.replace('_', ' ').toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-      </View>
-
-      {/* Property Summary */}
-      <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Property Overview</Text>
-          <View style={styles.summaryStats}>
-            <View style={styles.summaryStat}>
-              <Text style={styles.summaryStatNumber}>{units.length}</Text>
-              <Text style={styles.summaryStatLabel}>Total Units</Text>
-            </View>
-            <View style={styles.summaryStat}>
-              <Text style={styles.summaryStatNumber}>
-                {units.filter(u => u.isOccupied).length}
-              </Text>
-              <Text style={styles.summaryStatLabel}>Occupied</Text>
-            </View>
-            <View style={styles.summaryStat}>
-              <Text style={styles.summaryStatNumber}>
-                {units.filter(u => !u.isOccupied).length}
-              </Text>
-              <Text style={styles.summaryStatLabel}>Available</Text>
-            </View>
-            <View style={styles.summaryStat}>
-              <Text style={styles.summaryStatNumber}>
-                {Math.round((units.filter(u => u.isOccupied).length / units.length) * 100)}%
-              </Text>
-              <Text style={styles.summaryStatLabel}>Occupancy</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Units List */}
+      {/* List area */}
       <ScrollView
         style={styles.unitsList}
         showsVerticalScrollIndicator={false}
@@ -939,151 +636,62 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           />
         }
       >
-        {floors.map(renderFloorSection)}
-        
-        {!loading && filteredUnits.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No units found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {searchQuery || filterStatus !== 'all' || filterType !== 'all'
-                ? 'Try adjusting your search or filters' 
-                : 'Add your first unit to start managing your property'
-              }
-            </Text>
-            {!searchQuery && filterStatus === 'all' && filterType === 'all' && (
+        {!selectedFloorId && !selectedUnitId && (
+          <View style={styles.floorSection}>
+            {floors.map(renderFloorCard)}
+          </View>
+        )}
+
+        {selectedFloorId && !selectedCategory && !selectedUnitId && (
+          <View style={styles.floorSection}>
+            {getFloorCategories(selectedFloorId).map(renderCategoryCard)}
+            {getFloorCategories(selectedFloorId).length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No categories on this floor</Text>
+                <Text style={styles.emptyStateSubtext}>Add categories from setup to manage here</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {selectedFloorId && selectedCategory && !selectedUnitId && (
+          <View style={styles.floorSection}>
+            {units.filter(u => u.floorId === selectedFloorId && u.unitType === selectedCategory).map(renderUnitCard)}
+            {units.filter(u => u.floorId === selectedFloorId && u.unitType === selectedCategory).length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No {selectedCategory.replace('_', ' ')} units on this floor</Text>
+                <Text style={styles.emptyStateSubtext}>Add units from setup to manage here</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {selectedUnitId && (
+          <View style={styles.unitCard}>
+            <Text style={styles.tenantsTitle}>Tenants</Text>
+            {selectedUnit?.currentTenants?.length ? (
+              selectedUnit.currentTenants.map(t => (
+                <View key={t.id} style={styles.tenantItem}>
+                  <Text style={styles.tenantName}>👤 {t.name}</Text>
+                  <Text style={styles.tenantContact}>{t.phone}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyStateSubtext}>No tenants assigned</Text>
+            )}
+
+            {selectedUnit?.isOccupied && (
               <TouchableOpacity
-                style={styles.addFirstUnitButton}
-                onPress={() => setShowAddUnitModal(true)}
+                style={[styles.actionButton, styles.vacateButton, { marginTop: 12 }]}
+                onPress={() => handleVacateUnit(selectedUnit.id)}
               >
-                <Text style={styles.addFirstUnitButtonText}>Add Your First Unit</Text>
+                <Text style={styles.actionButtonText}>Vacate Unit</Text>
               </TouchableOpacity>
             )}
           </View>
         )}
       </ScrollView>
-
-      {/* Add Unit Modal */}
-      <Modal
-        visible={showAddUnitModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddUnitModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Unit</Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Unit Number (e.g., 101, A1)"
-              value={newUnitData.unitNumber}
-              onChangeText={(text) => setNewUnitData(prev => ({ ...prev, unitNumber: text }))}
-            />
-            
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Rent (₹)"
-                keyboardType="numeric"
-                value={newUnitData.rent.toString()}
-                onChangeText={(text) => setNewUnitData(prev => ({ ...prev, rent: parseInt(text) || 0 }))}
-              />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Deposit (₹)"
-                keyboardType="numeric"
-                value={newUnitData.deposit.toString()}
-                onChangeText={(text) => setNewUnitData(prev => ({ ...prev, deposit: parseInt(text) || 0 }))}
-              />
-            </View>
-            
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Capacity"
-                keyboardType="numeric"
-                value={newUnitData.capacity.toString()}
-                onChangeText={(text) => setNewUnitData(prev => ({ ...prev, capacity: parseInt(text) || 1 }))}
-              />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Floor Number"
-                keyboardType="numeric"
-                value={newUnitData.floorNumber.toString()}
-                onChangeText={(text) => setNewUnitData(prev => ({ ...prev, floorNumber: parseInt(text) || 1 }))}
-              />
-            </View>
-            
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowAddUnitModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleAddUnit}
-              >
-                <Text style={styles.saveButtonText}>Add Unit</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Assign Tenant Modal */}
-      <Modal
-        visible={showAssignTenantModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAssignTenantModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              Assign Tenant to Unit {selectedUnit?.unitNumber}
-            </Text>
-            
-            <Text style={styles.modalSubtitle}>Select a tenant to assign:</Text>
-            
-            <ScrollView style={styles.tenantsList}>
-              {availableTenants.map(tenant => (
-                <TouchableOpacity
-                  key={tenant.id}
-                  style={[
-                    styles.tenantOption,
-                    selectedTenant?.id === tenant.id && styles.tenantOptionSelected
-                  ]}
-                  onPress={() => setSelectedTenant(tenant)}
-                >
-                  <Text style={styles.tenantOptionName}>{tenant.name}</Text>
-                  <Text style={styles.tenantOptionContact}>{tenant.phone}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowAssignTenantModal(false);
-                  setSelectedTenant(null);
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={() => handleAssignTenant(selectedUnit?.id || '')}
-                disabled={!selectedTenant}
-              >
-                <Text style={styles.saveButtonText}>Assign Tenant</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* No modals in simplified drill-down UI */}
     </SafeAreaView>
   );
 };
@@ -1523,3 +1131,4 @@ const styles = StyleSheet.create({
 });
 
 export default RoomManagementScreen;
+
