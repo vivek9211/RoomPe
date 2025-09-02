@@ -179,7 +179,6 @@ const EditPropertyScreen: React.FC<EditPropertyScreenProps> = ({ navigation, rou
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Basic Information</Text>
             {renderInput('Property Name', 'name', 'Enter property name')}
-            {renderInput('Total Rooms', 'totalRooms', '1', 'numeric')}
           </View>
 
           {/* Location */}

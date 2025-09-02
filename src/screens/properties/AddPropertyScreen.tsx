@@ -28,6 +28,8 @@ const AddPropertyScreen: React.FC = () => {
     name: '',
     ownerId: userProfile?.uid || '',
     type: PropertyType.PG,
+    ownerName: '',
+    ownerPhone: '',
     location: {
       address: '',
       city: '',
@@ -35,7 +37,6 @@ const AddPropertyScreen: React.FC = () => {
       postalCode: '',
       country: 'India',
     },
-    totalRooms: 1,
     pricing: {
       baseRent: 0,
       deposit: 0,
@@ -46,6 +47,16 @@ const AddPropertyScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const handleInputChange = (field: string, value: any) => {
+    // For phone field, only allow numeric input
+    if (field === 'ownerPhone') {
+      const numericValue = value.replace(/[^0-9]/g, '');
+      setFormData(prev => ({
+        ...prev,
+        [field]: numericValue,
+      }));
+      return;
+    }
+
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
       setFormData(prev => ({
@@ -80,15 +91,22 @@ const AddPropertyScreen: React.FC = () => {
       Alert.alert('Error', 'State is required');
       return false;
     }
-    if (!formData.location.postalCode.trim()) {
-      Alert.alert('Error', 'Postal code is required');
-      return false;
-    }
-    if (formData.totalRooms < 1) {
-      Alert.alert('Error', 'Total rooms must be at least 1');
-      return false;
-    }
-    if (formData.pricing.baseRent <= 0) {
+         if (!formData.location.postalCode.trim()) {
+       Alert.alert('Error', 'Postal code is required');
+       return false;
+     }
+     
+     if (!formData.ownerName.trim()) {
+       Alert.alert('Error', 'Owner name is required');
+       return false;
+     }
+     
+     if (!formData.ownerPhone.trim()) {
+       Alert.alert('Error', 'Owner phone number is required');
+       return false;
+     }
+     
+     if (formData.pricing.baseRent <= 0) {
       Alert.alert('Error', 'Base rent must be greater than 0');
       return false;
     }
@@ -108,19 +126,20 @@ const AddPropertyScreen: React.FC = () => {
       const propertyData = {
         ...formData,
         status: PropertyStatus.ACTIVE,
-        availableRooms: formData.totalRooms,
       };
 
       // Save property to Firebase
       const propertyId = await firestoreService.createProperty(propertyData);
       
-      // Create complete property object with Firebase ID
-      const newProperty: Property = {
-        id: propertyId,
-        ...propertyData,
-        createdAt: new Date() as any,
-        updatedAt: new Date() as any,
-      };
+             // Create complete property object with Firebase ID
+       const newProperty: Property = {
+         id: propertyId,
+         ...propertyData,
+         totalRooms: 0, // Will be set during room mapping
+         availableRooms: 0, // Will be calculated from room mapping
+         createdAt: new Date() as any,
+         updatedAt: new Date() as any,
+       };
 
       // Set as selected property
       setSelectedProperty(newProperty);
@@ -147,7 +166,7 @@ const AddPropertyScreen: React.FC = () => {
     label: string,
     field: string,
     placeholder: string,
-    keyboardType: 'default' | 'numeric' | 'email-address' = 'default',
+    keyboardType: 'default' | 'numeric' | 'email-address' | 'phone-pad' = 'default',
     multiline: boolean = false
   ) => (
     <View style={styles.inputContainer}>
@@ -225,28 +244,34 @@ const AddPropertyScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Basic Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
-            
-            {renderInput('Property Name', 'name', 'Enter property name')}
-            
-            {renderPicker(
-              'Property Type',
-              'type',
-              [
-                { label: 'PG', value: PropertyType.PG },
-                { label: 'Flat', value: PropertyType.FLAT },
-                { label: 'Apartment', value: PropertyType.APARTMENT },
-                { label: 'House', value: PropertyType.HOUSE },
-                { label: 'Villa', value: PropertyType.VILLA },
-                { label: 'Studio', value: PropertyType.STUDIO },
-              ],
-              formData.type
-            )}
-            
-            {renderInput('Total Rooms', 'totalRooms', '1', 'numeric')}
-          </View>
+                     {/* Basic Information */}
+           <View style={styles.section}>
+             <Text style={styles.sectionTitle}>Basic Information</Text>
+             
+             {renderInput('Property Name', 'name', 'Enter property name')}
+             
+             {renderPicker(
+               'Property Type',
+               'type',
+               [
+                 { label: 'PG', value: PropertyType.PG },
+                 { label: 'Flat', value: PropertyType.FLAT },
+                 { label: 'Apartment', value: PropertyType.APARTMENT },
+                 { label: 'House', value: PropertyType.HOUSE },
+                 { label: 'Villa', value: PropertyType.VILLA },
+                 { label: 'Studio', value: PropertyType.STUDIO },
+               ],
+               formData.type
+             )}
+           </View>
+
+           {/* Property Owner Details */}
+           <View style={styles.section}>
+             <Text style={styles.sectionTitle}>Property Owner Details</Text>
+             
+             {renderInput('Owner Name', 'ownerName', 'Enter owner name')}
+                           {renderInput('Owner Phone', 'ownerPhone', 'Enter owner phone number', 'numeric')}
+           </View>
 
           {/* Location Information */}
           <View style={styles.section}>
@@ -277,6 +302,8 @@ const AddPropertyScreen: React.FC = () => {
               formData.pricing.currency
             )}
           </View>
+
+          
 
           {/* Submit Button */}
           <TouchableOpacity
@@ -333,14 +360,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
   },
   section: {
-    marginBottom: dimensions.spacing.xl,
+    marginBottom: dimensions.spacing.md, // Reduced from xl to md for tighter spacing
   },
   sectionTitle: {
     fontSize: fonts.lg,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: dimensions.spacing.md,
-    marginTop: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.sm, // Reduced from md to sm
+    marginTop: dimensions.spacing.md, // Reduced from lg to md
   },
   inputContainer: {
     marginBottom: dimensions.spacing.md,
@@ -392,15 +419,15 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: colors.primary,
-    paddingVertical: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md, // Reduced from lg to md for less height
     borderRadius: dimensions.borderRadius.md,
     alignItems: 'center',
-    marginVertical: dimensions.spacing.xl,
+    marginVertical: dimensions.spacing.lg, // Reduced from xl to lg
     shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 }, // Reduced shadow for cleaner look
+    shadowOpacity: 0.08, // Reduced shadow opacity
+    shadowRadius: 3, // Reduced shadow radius
+    elevation: 2, // Reduced elevation
   },
   submitButtonDisabled: {
     backgroundColor: colors.textMuted,
@@ -409,6 +436,12 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fonts.lg,
     fontWeight: '600',
+  },
+  helperText: {
+    fontSize: fonts.sm,
+    color: colors.textMuted,
+    marginTop: dimensions.spacing.xs,
+    fontStyle: 'italic',
   },
 });
 
