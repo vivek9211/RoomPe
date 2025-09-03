@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   RefreshControl,
+  FlatList,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
@@ -22,10 +23,11 @@ import {
   Unit,
   Floor
 } from '../../types/room.types';
-import { Tenant } from '../../types/tenant.types';
+import { Tenant, TenantStatus } from '../../types/tenant.types';
 import { User } from '../../types/user.types';
 import { firestoreService } from '../../services/firestore';
 import { tenantApiService } from '../../services/api/tenantApi';
+import TenantStatistics from '../../components/TenantStatistics';
 
 interface RoomManagementScreenProps {
   navigation: any;
@@ -52,12 +54,23 @@ interface TenantDisplay {
   name: string;
   phone: string;
   email: string;
+  status: TenantStatus;
+  rent: number;
+  deposit: number;
+  agreementStart: Date;
+  agreementEnd: Date;
 }
 
 interface UnitWithDetails extends Unit {
   currentTenants: TenantDisplay[];
   amenities: string[];
   status: 'available' | 'occupied' | 'maintenance' | 'reserved';
+}
+
+interface FloorWithTenants extends Floor {
+  units: UnitWithDetails[];
+  tenantCount: number;
+  occupancyRate: number;
 }
 
 // Helper functions
@@ -178,11 +191,11 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
   const { property } = route.params || {};
   const [units, setUnits] = useState<UnitWithDetails[]>([]);
   const [rooms, setRooms] = useState<RoomWithBeds[]>([]);
-  const [floors, setFloors] = useState<Floor[]>([]);
+  const [floors, setFloors] = useState<FloorWithTenants[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
-  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<UnitType | null>(null);
+     const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
+   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+   const [selectedCategory, setSelectedCategory] = useState<UnitType | null>(null);
 
   // Form data
   const [newUnitData, setNewUnitData] = useState({
@@ -225,7 +238,7 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
         // Check if we have floorConfigs (configuration data) or floors (actual units)
         if (roomMapping.floorConfigs && Array.isArray(roomMapping.floorConfigs)) {
           // This is configuration data, we need to generate actual units
-          const floorsData: Floor[] = [];
+          const floorsData: FloorWithTenants[] = [];
           const unitsData: UnitWithDetails[] = [];
           
           roomMapping.floorConfigs.forEach((floorConfig: any, floorIndex: number) => {
@@ -237,7 +250,7 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
             const totalRooms = Object.values(floorConfig.roomConfigs || {}).reduce((sum: number, count: any) => sum + (count || 0), 0);
             const floorTotalUnits = totalUnits + totalRooms;
             
-            const floor: Floor = {
+            const floor: FloorWithTenants = {
               id: `floor${floorNumber}`,
               floorNumber,
               floorName,
@@ -245,6 +258,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
               filledUnits: 0,
               vacantUnits: floorTotalUnits,
               units: [],
+              tenantCount: 0,
+              occupancyRate: 0,
               createdAt: new Date() as any,
               updatedAt: new Date() as any,
             };
@@ -313,11 +328,18 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           
         } else if (roomMapping.floors && Array.isArray(roomMapping.floors)) {
           // This is actual unit data
-          const floorsData = roomMapping.floors;
+          const floorsData: FloorWithTenants[] = [];
           const unitsData: UnitWithDetails[] = [];
           
           // Process each floor and its units
-          floorsData.forEach((floor: any) => {
+          roomMapping.floors.forEach((floor: any) => {
+            const floorWithTenants: FloorWithTenants = {
+              ...floor,
+              tenantCount: 0,
+              occupancyRate: 0,
+              units: [],
+            };
+            
             if (floor.units && Array.isArray(floor.units)) {
               floor.units.forEach((unit: any) => {
                 // Convert Firestore timestamp to Date
@@ -330,8 +352,11 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                   status: unit.status || 'available',
                 };
                 unitsData.push(unitWithDetails);
+                floorWithTenants.units.push(unitWithDetails);
               });
             }
+            
+            floorsData.push(floorWithTenants);
           });
           
           // Load tenant details for occupied units
@@ -349,6 +374,11 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                           name: user?.name || 'Unknown Tenant',
                           phone: user?.phone || 'No Phone',
                           email: user?.email || 'No Email',
+                          status: tenant.status,
+                          rent: tenant.rent,
+                          deposit: tenant.deposit,
+                          agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
+                          agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
                         };
                       }
                     } catch (error) {
@@ -359,6 +389,11 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                       name: 'Unknown Tenant',
                       phone: 'No Phone',
                       email: 'No Email',
+                      status: TenantStatus.INACTIVE,
+                      rent: 0,
+                      deposit: 0,
+                      agreementStart: new Date(),
+                      agreementEnd: new Date(),
                     };
                   })
                 );
@@ -370,6 +405,28 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
               return unit;
             })
           );
+          
+          // Update floors with tenant information
+          floorsData.forEach(floor => {
+            let totalTenants = 0;
+            let occupiedUnits = 0;
+            
+            floor.units.forEach(unit => {
+              const unitWithTenants = unitsWithTenants.find(u => u.id === unit.id);
+              if (unitWithTenants) {
+                unit.currentTenants = unitWithTenants.currentTenants;
+                totalTenants += unitWithTenants.currentTenants.length;
+                if (unitWithTenants.currentTenants.length > 0) {
+                  occupiedUnits++;
+                }
+              }
+            });
+            
+            floor.tenantCount = totalTenants;
+            floor.filledUnits = occupiedUnits;
+            floor.vacantUnits = floor.totalUnits - occupiedUnits;
+            floor.occupancyRate = floor.totalUnits > 0 ? (occupiedUnits / floor.totalUnits) * 100 : 0;
+          });
           
           setUnits(unitsWithTenants);
           setFloors(floorsData);
@@ -396,15 +453,9 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
     }
   };
 
-  // Simplified flow does not preload available tenants
-
   const handleRefresh = () => {
     loadPropertyData();
   };
-
-  // Add Unit flow removed from simplified UI
-
-  // Assign Tenant flow removed from simplified UI
 
   const handleVacateUnit = (unitId: string) => {
     Alert.alert(
@@ -468,10 +519,6 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
     );
   };
 
-  // Edit/Delete flows removed from simplified UI
-
-  // No filters/search in simplified UI
-
   const getUnitTypeIcon = (unitType: UnitType) => {
     switch (unitType) {
       case UnitType.ROOM: return '🏠';
@@ -490,6 +537,18 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
       case 'occupied': return colors.primary;
       case 'maintenance': return colors.warning;
       case 'reserved': return colors.info;
+      default: return colors.gray;
+    }
+  };
+
+  const getTenantStatusColor = (status: TenantStatus) => {
+    switch (status) {
+      case TenantStatus.ACTIVE: return colors.success;
+      case TenantStatus.PENDING: return colors.warning;
+      case TenantStatus.INACTIVE: return colors.gray;
+      case TenantStatus.LEFT: return colors.error;
+      case TenantStatus.SUSPENDED: return colors.warning;
+      case TenantStatus.EVICTED: return colors.error;
       default: return colors.gray;
     }
   };
@@ -520,11 +579,10 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           💰 Rent: ₹{unit.rent}/month | Deposit: ₹{unit.deposit}
         </Text>
       </View>
-
     </TouchableOpacity>
   );
 
-  const renderFloorCard = (floor: Floor) => (
+  const renderFloorCard = (floor: FloorWithTenants) => (
     <TouchableOpacity key={floor.id} style={styles.unitCard} onPress={() => {
       setSelectedFloorId(floor.id);
       setSelectedCategory(null);
@@ -541,7 +599,92 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           </Text>
         </View>
       </View>
+      
+      <View style={styles.floorTenantInfo}>
+        <Text style={styles.tenantCountText}>
+          👥 Total Tenants: {floor.tenantCount}
+        </Text>
+        <Text style={styles.occupancyRateText}>
+          📊 Occupancy Rate: {Math.round(floor.occupancyRate)}%
+        </Text>
+      </View>
     </TouchableOpacity>
+  );
+
+  const renderTenantCard = (tenant: TenantDisplay) => (
+    <View style={styles.tenantCard}>
+      <View style={styles.tenantHeader}>
+        <Text style={styles.tenantName}>{tenant.name}</Text>
+        <View style={[styles.tenantStatus, { backgroundColor: getTenantStatusColor(tenant.status) }]}>
+          <Text style={styles.tenantStatusText}>{tenant.status.toUpperCase()}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.tenantDetails}>
+        <Text style={styles.tenantDetailText}>📞 {tenant.phone}</Text>
+        <Text style={styles.tenantDetailText}>📧 {tenant.email}</Text>
+        <Text style={styles.tenantDetailText}>💰 Rent: ₹{tenant.rent}/month</Text>
+        <Text style={styles.tenantDetailText}>💳 Deposit: ₹{tenant.deposit}</Text>
+        <Text style={styles.tenantDetailText}>
+          📅 Agreement: {tenant.agreementStart.toLocaleDateString()} - {tenant.agreementEnd.toLocaleDateString()}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderUnitWithTenants = (unit: UnitWithDetails) => (
+    <View style={styles.unitWithTenantsCard}>
+      <TouchableOpacity 
+        style={styles.unitHeader} 
+        onPress={() => setSelectedUnitId(unit.id)}
+      >
+        <View style={styles.unitInfo}>
+          <Text style={styles.unitIcon}>{getUnitTypeIcon(unit.unitType)}</Text>
+          <View style={styles.unitDetails}>
+            <Text style={styles.unitNumber}>Room {unit.unitNumber}</Text>
+            <Text style={styles.unitType}>
+              {unit.unitType.replace('_', ' ').toUpperCase()}
+              {unit.sharingType && ` - ${unit.sharingType.replace('_', ' ').toUpperCase()}`}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.unitStatus, { backgroundColor: getStatusColor(unit.status) }]}>
+          <Text style={styles.unitStatusText}>{unit.status.toUpperCase()}</Text>
+        </View>
+      </TouchableOpacity>
+      
+      <View style={styles.unitStats}>
+        <Text style={styles.statText}>
+          👥 Capacity: {unit.capacity} | Occupied: {unit.currentTenants.length}
+        </Text>
+        <Text style={styles.statText}>
+          💰 Rent: ₹{unit.rent}/month | Deposit: ₹{unit.deposit}
+        </Text>
+      </View>
+
+             {unit.currentTenants.length > 0 && (
+         <View style={styles.tenantsSection}>
+           <Text style={styles.tenantsSectionTitle}>Current Tenants ({unit.currentTenants.length})</Text>
+           {unit.currentTenants.map((tenant, index) => (
+             <View key={tenant.id || `tenant-${index}`} style={styles.tenantItem}>
+               {renderTenantCard(tenant)}
+             </View>
+           ))}
+         </View>
+       )}
+
+      {unit.currentTenants.length === 0 && (
+        <View style={styles.emptyTenantsSection}>
+          <Text style={styles.emptyTenantsText}>No tenants assigned to this room</Text>
+          <TouchableOpacity 
+            style={styles.assignTenantButton}
+            onPress={() => navigation.navigate('AddTenant', { property, roomId: unit.id })}
+          >
+            <Text style={styles.assignTenantButtonText}>Assign Tenant</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 
   const renderCategoryCard = (category: UnitType) => (
@@ -612,86 +755,92 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {!selectedFloorId && !selectedUnitId && 'Floors'}
+          {!selectedFloorId && !selectedUnitId && 'Room Management'}
           {selectedFloorId && !selectedCategory && !selectedUnitId && selectedFloor?.floorName}
           {selectedFloorId && selectedCategory && !selectedUnitId && `${selectedCategory.replace('_', ' ').toUpperCase()} - ${selectedFloor?.floorName}`}
-          {selectedUnitId && `Unit ${selectedUnit?.unitNumber}`}
+          {selectedUnitId && `Room ${selectedUnit?.unitNumber}`}
         </Text>
         <View style={{ width: 90 }} />
-      </View>
+             </View>
 
-      {/* Content spacer */}
-      <View style={styles.summaryContainer} />
+       {/* Content */}
+       <ScrollView
+         style={styles.unitsList}
+         showsVerticalScrollIndicator={false}
+         refreshControl={
+           <RefreshControl
+             refreshing={loading}
+             onRefresh={handleRefresh}
+             colors={[colors.primary]}
+             tintColor={colors.primary}
+           />
+         }
+       >
+         {!selectedFloorId && !selectedUnitId && (
+           <>
+             <TenantStatistics 
+               floors={floors} 
+               totalTenants={floors.reduce((sum, floor) => sum + floor.tenantCount, 0)} 
+             />
+             <View style={styles.floorSection}>
+               <Text style={styles.sectionTitle}>Floors Overview</Text>
+               {floors.map((floor, index) => (
+                 <View key={floor.id || `floor-${index}`}>
+                   {renderFloorCard(floor)}
+                 </View>
+               ))}
+             </View>
+           </>
+         )}
+         
+         {selectedFloorId && !selectedCategory && !selectedUnitId && (
+           <View style={styles.categorySection}>
+             <Text style={styles.sectionTitle}>Room Categories - {selectedFloor?.floorName}</Text>
+             {getFloorCategories(selectedFloorId).map((category, index) => (
+               <View key={category || `category-${index}`}>
+                 {renderCategoryCard(category)}
+               </View>
+             ))}
+           </View>
+         )}
+         
+         {selectedFloorId && selectedCategory && !selectedUnitId && (
+           <View style={styles.unitsSection}>
+             <Text style={styles.sectionTitle}>
+               {selectedCategory.replace('_', ' ').toUpperCase()} Rooms - {selectedFloor?.floorName}
+             </Text>
+             {units
+               .filter(unit => unit.floorId === selectedFloorId && unit.unitType === selectedCategory)
+               .map((unit, index) => (
+                 <View key={unit.id || `unit-${index}`}>
+                   {renderUnitWithTenants(unit)}
+                 </View>
+               ))}
+           </View>
+         )}
+         
+         {selectedUnitId && (
+           <View style={styles.unitDetailSection}>
+             <Text style={styles.sectionTitle}>Room Details - {selectedUnit?.unitNumber}</Text>
+             {selectedUnit && renderUnitWithTenants(selectedUnit)}
+           </View>
+         )}
 
-      {/* List area */}
-      <ScrollView
-        style={styles.unitsList}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {!selectedFloorId && !selectedUnitId && (
-          <View style={styles.floorSection}>
-            {floors.map(renderFloorCard)}
-          </View>
-        )}
-
-        {selectedFloorId && !selectedCategory && !selectedUnitId && (
-          <View style={styles.floorSection}>
-            {getFloorCategories(selectedFloorId).map(renderCategoryCard)}
-            {getFloorCategories(selectedFloorId).length === 0 && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No categories on this floor</Text>
-                <Text style={styles.emptyStateSubtext}>Add categories from setup to manage here</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {selectedFloorId && selectedCategory && !selectedUnitId && (
-          <View style={styles.floorSection}>
-            {units.filter(u => u.floorId === selectedFloorId && u.unitType === selectedCategory).map(renderUnitCard)}
-            {units.filter(u => u.floorId === selectedFloorId && u.unitType === selectedCategory).length === 0 && (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No {selectedCategory.replace('_', ' ')} units on this floor</Text>
-                <Text style={styles.emptyStateSubtext}>Add units from setup to manage here</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {selectedUnitId && (
-          <View style={styles.unitCard}>
-            <Text style={styles.tenantsTitle}>Tenants</Text>
-            {selectedUnit?.currentTenants?.length ? (
-              selectedUnit.currentTenants.map(t => (
-                <View key={t.id} style={styles.tenantItem}>
-                  <Text style={styles.tenantName}>👤 {t.name}</Text>
-                  <Text style={styles.tenantContact}>{t.phone}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.emptyStateSubtext}>No tenants assigned</Text>
-            )}
-
-            {selectedUnit?.isOccupied && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.vacateButton, { marginTop: 12 }]}
-                onPress={() => handleVacateUnit(selectedUnit.id)}
-              >
-                <Text style={styles.actionButtonText}>Vacate Unit</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </ScrollView>
-      {/* No modals in simplified drill-down UI */}
+         {units.length === 0 && !loading && (
+           <View style={styles.emptyState}>
+             <Text style={styles.emptyStateText}>No rooms configured yet</Text>
+             <Text style={styles.emptyStateSubtext}>
+               Set up your room mapping to start managing tenants
+             </Text>
+             <TouchableOpacity
+               style={styles.addFirstUnitButton}
+               onPress={() => navigation.navigate('RoomMapping', { property })}
+             >
+               <Text style={styles.addFirstUnitButtonText}>Configure Rooms</Text>
+             </TouchableOpacity>
+           </View>
+         )}
+       </ScrollView>
     </SafeAreaView>
   );
 };
@@ -702,163 +851,77 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.white,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
-    height: 56,
+    height: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
   },
   backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.backgroundLight,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: dimensions.spacing.md,
   },
   backIcon: {
-    fontSize: 24,
-    color: colors.white,
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontSize: fonts.lg,
-    fontWeight: '600',
-    color: colors.white,
-    flex: 1,
-  },
-  addButton: {
-    backgroundColor: colors.white,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.sm,
-  },
-  addButtonText: {
-    color: colors.primary,
-    fontSize: fonts.sm,
-    fontWeight: '500',
-  },
-  searchContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
-    paddingHorizontal: dimensions.spacing.md,
-    height: 48,
-    marginBottom: dimensions.spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchIcon: {
-    fontSize: 20,
-    marginRight: dimensions.spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: fonts.md,
+    fontSize: fonts.xl,
     color: colors.textPrimary,
   },
-  filterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.sm,
-  },
-  filterToggle: {
-    backgroundColor: colors.white,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-  },
-  filterToggleText: {
-    color: colors.textSecondary,
-    fontSize: fonts.sm,
-    fontWeight: '500',
-  },
-
-  filtersContainer: {
-    marginTop: dimensions.spacing.sm,
-  },
-  filterContainer: {
-    marginBottom: dimensions.spacing.sm,
-  },
-  filterChip: {
-    backgroundColor: colors.white,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.sm,
-    marginRight: dimensions.spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-  },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterChipText: {
-    color: colors.textSecondary,
-    fontSize: fonts.sm,
-    fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: colors.white,
-  },
-  summaryContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.md,
-  },
-  summaryCard: {
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
-    padding: dimensions.spacing.lg,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  summaryTitle: {
-    fontSize: fonts.md,
+     headerTitle: {
+     flex: 1,
+     fontSize: fonts.lg,
+     fontWeight: '600',
+     color: colors.textPrimary,
+     textAlign: 'center',
+   },
+   unitsList: {
+     flex: 1,
+     paddingHorizontal: dimensions.spacing.lg,
+   },
+  sectionTitle: {
+    fontSize: fonts.lg,
     fontWeight: '600',
     color: colors.textPrimary,
     marginBottom: dimensions.spacing.md,
+    marginTop: dimensions.spacing.lg,
   },
-  summaryStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  summaryStat: {
-    alignItems: 'center',
-  },
-  summaryStatNumber: {
-    fontSize: fonts.lg,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  summaryStatLabel: {
-    fontSize: fonts.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  unitsList: {
-    flex: 1,
-    paddingHorizontal: dimensions.spacing.lg,
-  },
-
   floorSection: {
     marginBottom: dimensions.spacing.lg,
+  },
+  categorySection: {
+    marginBottom: dimensions.spacing.lg,
+  },
+  unitsSection: {
+    marginBottom: dimensions.spacing.lg,
+  },
+  unitDetailSection: {
+    marginBottom: dimensions.spacing.lg,
+  },
+  listViewSection: {
+    marginBottom: dimensions.spacing.lg,
+  },
+  unitCard: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.md,
+    padding: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   floorHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
-    paddingHorizontal: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.sm,
   },
   floorTitle: {
     fontSize: fonts.lg,
@@ -872,22 +935,26 @@ const styles = StyleSheet.create({
     fontSize: fonts.sm,
     color: colors.textSecondary,
   },
-  unitCard: {
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
-    padding: dimensions.spacing.lg,
-    marginBottom: dimensions.spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  floorTenantInfo: {
+    marginTop: dimensions.spacing.sm,
+    paddingTop: dimensions.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+  },
+  tenantCountText: {
+    fontSize: fonts.sm,
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.xs,
+  },
+  occupancyRateText: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
   },
   unitHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
   },
   unitInfo: {
     flexDirection: 'row',
@@ -895,21 +962,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   unitIcon: {
-    fontSize: 24,
+    fontSize: fonts.xl,
     marginRight: dimensions.spacing.sm,
   },
   unitDetails: {
     flex: 1,
   },
   unitNumber: {
-    fontSize: fonts.lg,
+    fontSize: fonts.md,
     fontWeight: '600',
     color: colors.textPrimary,
   },
   unitType: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
-    marginTop: 2,
   },
   unitStatus: {
     paddingHorizontal: dimensions.spacing.sm,
@@ -917,87 +983,99 @@ const styles = StyleSheet.create({
     borderRadius: dimensions.borderRadius.sm,
   },
   unitStatusText: {
-    color: colors.white,
     fontSize: fonts.xs,
     fontWeight: '500',
+    color: colors.white,
   },
   unitStats: {
-    marginBottom: dimensions.spacing.md,
+    marginTop: dimensions.spacing.sm,
   },
   statText: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: dimensions.spacing.xs,
   },
-  amenitiesContainer: {
-    marginBottom: dimensions.spacing.md,
-  },
-  amenitiesTitle: {
-    fontSize: fonts.sm,
-    fontWeight: '600',
-    color: colors.textPrimary,
+  tenantCard: {
+    backgroundColor: colors.backgroundLight,
+    padding: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.sm,
     marginBottom: dimensions.spacing.sm,
   },
-  amenitiesList: {
+  tenantHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.sm,
   },
-  amenityChip: {
-    backgroundColor: colors.backgroundLight,
+  tenantName: {
+    fontSize: fonts.md,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  tenantStatus: {
     paddingHorizontal: dimensions.spacing.sm,
     paddingVertical: dimensions.spacing.xs,
     borderRadius: dimensions.borderRadius.sm,
+  },
+  tenantStatusText: {
     fontSize: fonts.xs,
-    color: colors.textSecondary,
-    marginRight: dimensions.spacing.sm,
-    marginBottom: dimensions.spacing.xs,
+    fontWeight: '500',
+    color: colors.white,
   },
-  tenantsContainer: {
-    marginBottom: dimensions.spacing.md,
+  tenantDetails: {
+    gap: dimensions.spacing.xs,
   },
-  tenantsTitle: {
+  tenantDetailText: {
     fontSize: fonts.sm,
+    color: colors.textSecondary,
+  },
+  unitWithTenantsCard: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.md,
+    padding: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tenantsSection: {
+    marginTop: dimensions.spacing.md,
+    paddingTop: dimensions.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+  },
+  tenantsSectionTitle: {
+    fontSize: fonts.md,
     fontWeight: '600',
     color: colors.textPrimary,
     marginBottom: dimensions.spacing.sm,
   },
   tenantItem: {
-    marginBottom: dimensions.spacing.xs,
+    marginBottom: dimensions.spacing.sm,
   },
-  tenantName: {
-    fontSize: fonts.sm,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  tenantContact: {
-    fontSize: fonts.xs,
-    color: colors.textSecondary,
-  },
-  unitActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: dimensions.spacing.sm,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: dimensions.spacing.sm,
-    paddingHorizontal: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.sm,
+  emptyTenantsSection: {
+    marginTop: dimensions.spacing.md,
+    paddingTop: dimensions.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
     alignItems: 'center',
   },
-  editButton: {
-    backgroundColor: colors.warning,
+  emptyTenantsText: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+    marginBottom: dimensions.spacing.md,
+    textAlign: 'center',
   },
-  deleteButton: {
-    backgroundColor: colors.error,
+  assignTenantButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.sm,
   },
-  assignButton: {
-    backgroundColor: colors.success,
-  },
-  vacateButton: {
-    backgroundColor: colors.error,
-  },
-  actionButtonText: {
+  assignTenantButtonText: {
     color: colors.white,
     fontSize: fonts.sm,
     fontWeight: '500',
@@ -1025,110 +1103,12 @@ const styles = StyleSheet.create({
     paddingVertical: dimensions.spacing.md,
     borderRadius: dimensions.borderRadius.md,
   },
-  addFirstUnitButtonText: {
-    color: colors.white,
-    fontSize: fonts.md,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.lg,
-    padding: dimensions.spacing.xl,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    fontSize: fonts.lg,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.lg,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: fonts.md,
-    color: colors.textSecondary,
-    marginBottom: dimensions.spacing.md,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-    borderRadius: dimensions.borderRadius.sm,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    fontSize: fonts.md,
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: dimensions.spacing.md,
-  },
-  halfInput: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  tenantsList: {
-    maxHeight: 200,
-    marginBottom: dimensions.spacing.lg,
-  },
-  tenantOption: {
-    backgroundColor: colors.backgroundLight,
-    padding: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.sm,
-    marginBottom: dimensions.spacing.sm,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  tenantOptionSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  tenantOptionName: {
-    fontSize: fonts.md,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  tenantOptionContact: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: dimensions.spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.sm,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: colors.lightGray,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-  },
-  cancelButtonText: {
-    color: colors.textSecondary,
-    fontSize: fonts.md,
-    fontWeight: '500',
-  },
-  saveButtonText: {
-    color: colors.white,
-    fontSize: fonts.md,
-    fontWeight: '500',
-  },
-});
+     addFirstUnitButtonText: {
+     color: colors.white,
+     fontSize: fonts.md,
+     fontWeight: '500',
+   },
+ });
 
 export default RoomManagementScreen;
 
