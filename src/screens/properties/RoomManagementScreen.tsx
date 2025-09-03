@@ -27,7 +27,6 @@ import { Tenant, TenantStatus } from '../../types/tenant.types';
 import { User } from '../../types/user.types';
 import { firestoreService } from '../../services/firestore';
 import { tenantApiService } from '../../services/api/tenantApi';
-import TenantStatistics from '../../components/TenantStatistics';
 
 interface RoomManagementScreenProps {
   navigation: any;
@@ -776,22 +775,18 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
            />
          }
        >
-         {!selectedFloorId && !selectedUnitId && (
-           <>
-             <TenantStatistics 
-               floors={floors} 
-               totalTenants={floors.reduce((sum, floor) => sum + floor.tenantCount, 0)} 
-             />
-             <View style={styles.floorSection}>
-               <Text style={styles.sectionTitle}>Floors Overview</Text>
-               {floors.map((floor, index) => (
-                 <View key={floor.id || `floor-${index}`}>
-                   {renderFloorCard(floor)}
-                 </View>
-               ))}
-             </View>
-           </>
-         )}
+                   {!selectedFloorId && !selectedUnitId && (
+            <>
+              <View style={styles.floorSection}>
+                <Text style={styles.sectionTitle}>Floors Overview</Text>
+                {floors.map((floor, index) => (
+                  <View key={floor.id || `floor-${index}`}>
+                    {renderFloorCard(floor)}
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
          
          {selectedFloorId && !selectedCategory && !selectedUnitId && (
            <View style={styles.categorySection}>
