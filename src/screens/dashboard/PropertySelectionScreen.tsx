@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProperty } from '../../contexts/PropertyContext';
 import { Property } from '../../types/property.types';
 import { firestoreService } from '../../services/firestore';
+import { tenantApiService } from '../../services/api/tenantApi';
 
 interface PropertySelectionScreenProps {
   navigation: any;
@@ -29,11 +30,14 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [roomMappings, setRoomMappings] = useState<{[key: string]: any}>({});
+  const [tenantCounts, setTenantCounts] = useState<{[propertyId: string]: number}>({});
+  const [occupiedRoomIds, setOccupiedRoomIds] = useState<{[propertyId: string]: string[]}>({});
 
   // Load properties and set up real-time listener
   useEffect(() => {
     if (userProfile?.uid) {
       loadProperties();
+      loadTenantCounts();
       
       // Set up real-time listener for properties
       const unsubscribe = firestoreService.onPropertiesByOwnerChange(
@@ -59,6 +63,9 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           
           // Load room mappings for updated properties
           await loadRoomMappings(properties);
+          
+          // Also refresh tenant counts when properties are updated
+          loadTenantCounts();
         }
       );
       
@@ -103,6 +110,65 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       Alert.alert('Error', 'Failed to load properties');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTenantCounts = async () => {
+    if (!userProfile?.uid) {
+      return;
+    }
+
+    try {
+      // Get all properties for the user
+      const firebaseProperties = await firestoreService.getPropertiesByOwner(userProfile.uid);
+      const counts: {[propertyId: string]: number} = {};
+      const occupiedRoomsData: {[propertyId: string]: string[]} = {};
+
+      // Load tenant count and occupied rooms for each property
+      for (const property of firebaseProperties) {
+        try {
+          const tenants = await tenantApiService.getTenantsByProperty(property.id);
+          counts[property.id] = tenants.length;
+          
+          // Track which rooms are occupied
+          const occupiedRoomIds = tenants.map(tenant => tenant.roomId).filter(roomId => roomId);
+          occupiedRoomsData[property.id] = occupiedRoomIds;
+        } catch (error) {
+          console.error(`Error loading tenants for property ${property.id}:`, error);
+          counts[property.id] = 0;
+          occupiedRoomsData[property.id] = [];
+        }
+      }
+
+      setTenantCounts(counts);
+      setOccupiedRoomIds(occupiedRoomsData);
+      console.log('Tenant counts loaded:', counts);
+      console.log('Occupied rooms loaded:', occupiedRoomsData);
+    } catch (error) {
+      console.error('Error loading tenant counts:', error);
+    }
+  };
+
+  // Function to update tenant count for a specific property
+  const updateTenantCountForProperty = async (propertyId: string) => {
+    try {
+      const tenants = await tenantApiService.getTenantsByProperty(propertyId);
+      const occupiedRoomIds = tenants.map(tenant => tenant.roomId).filter(roomId => roomId);
+      
+      setTenantCounts(prev => ({
+        ...prev,
+        [propertyId]: tenants.length
+      }));
+      
+      setOccupiedRoomIds(prev => ({
+        ...prev,
+        [propertyId]: occupiedRoomIds
+      }));
+      
+      console.log(`Updated tenant count for property ${propertyId}: ${tenants.length}`);
+      console.log(`Updated occupied rooms for property ${propertyId}:`, occupiedRoomIds);
+    } catch (error) {
+      console.error(`Error updating tenant count for property ${propertyId}:`, error);
     }
   };
 
@@ -185,6 +251,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
 
   const handleRefresh = () => {
     loadProperties();
+    loadTenantCounts();
   };
 
   const getRoomBedCounts = (property: Property) => {
@@ -286,10 +353,16 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       });
     });
 
-    // For now, we'll use the property's availableRooms to calculate occupied
-    // This could be enhanced to get actual occupancy from room mapping data
-    occupiedRooms = (property.totalRooms || 0) - (property.availableRooms || 0);
-    occupiedBeds = Math.min(occupiedRooms, totalBeds); // Don't exceed total beds
+    // Calculate occupied rooms and beds based on actual tenant assignments
+    const tenantCount = tenantCounts[property.id] || 0;
+    const occupiedRoomIdsList = occupiedRoomIds[property.id] || [];
+    
+    // Count actual occupied rooms based on tenant assignments
+    occupiedRooms = occupiedRoomIdsList.length;
+    
+    // For beds, we'll use the tenant count as a proxy since each tenant typically occupies one bed
+    // In a more sophisticated system, you might want to track bed assignments specifically
+    occupiedBeds = Math.min(tenantCount, totalBeds);
 
     return {
       totalRooms,
@@ -348,12 +421,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           <Text style={styles.metricIcon}>👥</Text>
           <Text style={styles.metricText}>
             Tenants: <Text style={styles.metricValue}>
-              {(() => {
-                const totalRooms = property.totalRooms || 0;
-                const availableRooms = property.availableRooms || 0;
-                const tenantCount = totalRooms - availableRooms;
-                return isNaN(tenantCount) ? 0 : Math.max(0, tenantCount);
-              })()}
+              {tenantCounts[property.id] || 0}
             </Text>
           </Text>
         </View>
