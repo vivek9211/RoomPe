@@ -20,8 +20,85 @@ import { CreateTenantData, TenantStatus } from '../../types/tenant.types';
 import { useTenants } from '../../hooks/useTenants';
 import { useAuth } from '../../contexts/AuthContext';
 import { firestoreService } from '../../services/firestore';
+import { tenantApiService } from '../../services/api/tenantApi';
 import { User, UserRole } from '../../types/user.types';
 import firestore from '@react-native-firebase/firestore';
+
+// Helper functions for room/unit configuration
+const getOrdinalSuffix = (num: number): string => {
+  const j = num % 10;
+  const k = num % 100;
+  if (j === 1 && k !== 11) return 'st';
+  if (j === 2 && k !== 12) return 'nd';
+  if (j === 3 && k !== 13) return 'rd';
+  return 'th';
+};
+
+const getCapacityForSharingType = (sharingType: string): number => {
+  switch (sharingType) {
+    case 'single': return 1;
+    case 'double': return 2;
+    case 'triple': return 3;
+    case 'four_sharing': return 4;
+    case 'five_sharing': return 5;
+    case 'six_sharing': return 6;
+    case 'seven_sharing': return 7;
+    case 'eight_sharing': return 8;
+    case 'nine_sharing': return 9;
+    default: return 1;
+  }
+};
+
+const getDefaultRentForSharingType = (sharingType: string): number => {
+  switch (sharingType) {
+    case 'single': return 8000;
+    case 'double': return 6000;
+    case 'triple': return 5000;
+    case 'four_sharing': return 4000;
+    case 'five_sharing': return 3500;
+    case 'six_sharing': return 3000;
+    case 'seven_sharing': return 2800;
+    case 'eight_sharing': return 2500;
+    case 'nine_sharing': return 2200;
+    default: return 8000;
+  }
+};
+
+const getDefaultDepositForSharingType = (sharingType: string): number => {
+  return getDefaultRentForSharingType(sharingType) * 2;
+};
+
+const getCapacityForUnitType = (unitType: string): number => {
+  switch (unitType) {
+    case 'bhk_1': return 2;
+    case 'bhk_2': return 4;
+    case 'bhk_3': return 6;
+    case 'bhk_4': return 8;
+    case 'bhk_5': return 10;
+    case 'bhk_6': return 12;
+    case 'studio_apartment': return 2;
+    case 'rk': return 1;
+    default: return 1;
+  }
+};
+
+const getDefaultRentForUnitType = (unitType: string): number => {
+  switch (unitType) {
+    case 'bhk_1': return 15000;
+    case 'bhk_2': return 25000;
+    case 'bhk_3': return 35000;
+    case 'bhk_4': return 45000;
+    case 'bhk_5': return 55000;
+    case 'bhk_6': return 65000;
+    case 'studio_apartment': return 12000;
+    case 'rk': return 10000;
+    default: return 8000;
+  }
+};
+
+const getDefaultDepositForUnitType = (unitType: string): number => {
+  return getDefaultRentForUnitType(unitType) * 2;
+};
 
 const AddTenantScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -132,141 +209,191 @@ const AddTenantScreen: React.FC = () => {
       const rooms: any[] = [];
       
       if (roomMapping && roomMapping.floorConfigs) {
-        // Iterate through floor configurations to find available rooms
-        for (const floor of roomMapping.floorConfigs) {
-          for (const unit of floor.units || []) {
-            // Check if unit is available (not fully occupied)
-            if (!unit.isOccupied || unit.tenantIds.length < unit.capacity) {
-              const unitType = unit.unitType || 'room';
-              const sharingType = unit.sharingType || 'single';
-              
-              // Create room display name based on unit type and floor
-              let roomName = '';
-              let roomType = '';
-              
-              switch (unitType) {
-                case 'rk':
-                  roomName = `RK ${unit.unitNumber}`;
-                  roomType = 'RK (Room + Kitchen)';
-                  break;
-                case 'bhk_1':
-                  roomName = `1 BHK ${unit.unitNumber}`;
-                  roomType = '1 BHK Flat';
-                  break;
-                case 'bhk_2':
-                  roomName = `2 BHK ${unit.unitNumber}`;
-                  roomType = '2 BHK Flat';
-                  break;
-                case 'bhk_3':
-                  roomName = `3 BHK ${unit.unitNumber}`;
-                  roomType = '3 BHK Flat';
-                  break;
-                case 'bhk_4':
-                  roomName = `4 BHK ${unit.unitNumber}`;
-                  roomType = '4 BHK Flat';
-                  break;
-                case 'bhk_5':
-                  roomName = `5 BHK ${unit.unitNumber}`;
-                  roomType = '5 BHK Flat';
-                  break;
-                case 'bhk_6':
-                  roomName = `6 BHK ${unit.unitNumber}`;
-                  roomType = '6 BHK Flat';
-                  break;
-                case 'studio_apartment':
-                  roomName = `Studio ${unit.unitNumber}`;
-                  roomType = 'Studio Apartment';
-                  break;
-                case 'room':
-                default:
-                  // Handle room sharing types
+        console.log('Room mapping loaded:', roomMapping);
+        
+        // Iterate through floor configurations to generate rooms
+        roomMapping.floorConfigs.forEach((floorConfig: any, floorIndex: number) => {
+          const floorNumber = floorIndex + 1;
+          const floorName = floorNumber === 1 ? 'Ground Floor' : `${floorNumber - 1}${getOrdinalSuffix(floorNumber - 1)} Floor`;
+          let unitCounter = 1;
+          
+          // Generate rooms from roomConfigs
+          if (floorConfig.roomConfigs) {
+            Object.entries(floorConfig.roomConfigs).forEach(([sharingType, count]) => {
+              const roomCount = count as number;
+              if (roomCount > 0) {
+                for (let i = 0; i < roomCount; i++) {
+                  const roomNumber = `${floorNumber}${String(unitCounter).padStart(2, '0')}`;
+                  
+                  // Get default values based on sharing type
+                  const capacity = getCapacityForSharingType(sharingType);
+                  const rent = getDefaultRentForSharingType(sharingType);
+                  const deposit = getDefaultDepositForSharingType(sharingType);
+                  
+                  // Create room display name
+                  let roomName = '';
+                  let roomType = '';
+                  
                   switch (sharingType) {
                     case 'single':
-                      roomName = `Room ${unit.unitNumber}`;
+                      roomName = `Room ${roomNumber}`;
                       roomType = 'Single Room';
                       break;
                     case 'double':
-                      roomName = `Room ${unit.unitNumber}`;
+                      roomName = `Room ${roomNumber}`;
                       roomType = 'Double Sharing';
                       break;
                     case 'triple':
-                      roomName = `Room ${unit.unitNumber}`;
+                      roomName = `Room ${roomNumber}`;
                       roomType = 'Triple Sharing';
                       break;
                     case 'four_sharing':
-                      roomName = `Room ${unit.unitNumber}`;
-                      roomType = 'Four Sharing';
+                      roomName = `Room ${roomNumber}`;
+                      roomType = '4 Sharing';
                       break;
                     case 'five_sharing':
-                      roomName = `Room ${unit.unitNumber}`;
-                      roomType = 'Five Sharing';
+                      roomName = `Room ${roomNumber}`;
+                      roomType = '5 Sharing';
                       break;
                     case 'six_sharing':
-                      roomName = `Room ${unit.unitNumber}`;
-                      roomType = 'Six Sharing';
+                      roomName = `Room ${roomNumber}`;
+                      roomType = '6 Sharing';
                       break;
                     case 'seven_sharing':
-                      roomName = `Room ${unit.unitNumber}`;
-                      roomType = 'Seven Sharing';
+                      roomName = `Room ${roomNumber}`;
+                      roomType = '7 Sharing';
                       break;
                     case 'eight_sharing':
-                      roomName = `Room ${unit.unitNumber}`;
-                      roomType = 'Eight Sharing';
+                      roomName = `Room ${roomNumber}`;
+                      roomType = '8 Sharing';
                       break;
                     case 'nine_sharing':
-                      roomName = `Room ${unit.unitNumber}`;
-                      roomType = 'Nine Sharing';
+                      roomName = `Room ${roomNumber}`;
+                      roomType = '9 Sharing';
                       break;
                     default:
-                      roomName = `Room ${unit.unitNumber}`;
+                      roomName = `Room ${roomNumber}`;
                       roomType = 'Room';
                   }
+                  
+                  rooms.push({
+                    id: roomNumber,
+                    name: `${roomName} (${floorName})`,
+                    roomNumber: roomNumber,
+                    type: roomType,
+                    unitType: 'room',
+                    sharingType: sharingType,
+                    capacity: capacity,
+                    occupied: 0, // Will be updated based on actual tenant data
+                    floorName: floorName,
+                    rent: rent,
+                    deposit: deposit,
+                    floorId: floorConfig.floorId
+                  });
+                  
+                  unitCounter++;
+                }
               }
-              
-              // Add floor information if available
-              if (floor.floorName) {
-                roomName += ` (${floor.floorName})`;
-              }
-              
-              rooms.push({
-                id: unit.id,
-                name: roomName,
-                roomNumber: unit.unitNumber,
-                type: roomType,
-                unitType: unitType,
-                sharingType: sharingType,
-                capacity: unit.capacity || 1,
-                occupied: unit.tenantIds.length || 0,
-                floorName: floor.floorName || `Floor ${floor.floorNumber}`,
-                rent: unit.rent || 0,
-                deposit: unit.deposit || 0,
-              });
-            }
+            });
           }
+          
+          // Generate units from unitConfigs
+          if (floorConfig.unitConfigs) {
+            Object.entries(floorConfig.unitConfigs).forEach(([unitType, count]) => {
+              const unitCount = count as number;
+              if (unitCount > 0) {
+                for (let i = 0; i < unitCount; i++) {
+                  const unitNumber = `${floorNumber}${String(unitCounter).padStart(2, '0')}`;
+                  
+                  // Get default values based on unit type
+                  const capacity = getCapacityForUnitType(unitType);
+                  const rent = getDefaultRentForUnitType(unitType);
+                  const deposit = getDefaultDepositForUnitType(unitType);
+                  
+                  // Create unit display name
+                  let unitName = '';
+                  let unitTypeDisplay = '';
+                  
+                  switch (unitType) {
+                    case 'bhk_1':
+                      unitName = `1 BHK ${unitNumber}`;
+                      unitTypeDisplay = '1 BHK Flat';
+                      break;
+                    case 'bhk_2':
+                      unitName = `2 BHK ${unitNumber}`;
+                      unitTypeDisplay = '2 BHK Flat';
+                      break;
+                    case 'bhk_3':
+                      unitName = `3 BHK ${unitNumber}`;
+                      unitTypeDisplay = '3 BHK Flat';
+                      break;
+                    case 'bhk_4':
+                      unitName = `4 BHK ${unitNumber}`;
+                      unitTypeDisplay = '4 BHK Flat';
+                      break;
+                    case 'bhk_5':
+                      unitName = `5 BHK ${unitNumber}`;
+                      unitTypeDisplay = '5 BHK Flat';
+                      break;
+                    case 'bhk_6':
+                      unitName = `6 BHK ${unitNumber}`;
+                      unitTypeDisplay = '6 BHK Flat';
+                      break;
+                    case 'rk':
+                      unitName = `RK ${unitNumber}`;
+                      unitTypeDisplay = 'RK (Room + Kitchen)';
+                      break;
+                    case 'studio_apartment':
+                      unitName = `Studio ${unitNumber}`;
+                      unitTypeDisplay = 'Studio Apartment';
+                      break;
+                    default:
+                      unitName = `Unit ${unitNumber}`;
+                      unitTypeDisplay = 'Unit';
+                  }
+                  
+                  rooms.push({
+                    id: unitNumber,
+                    name: `${unitName} (${floorName})`,
+                    roomNumber: unitNumber,
+                    type: unitTypeDisplay,
+                    unitType: unitType,
+                    sharingType: 'single',
+                    capacity: capacity,
+                    occupied: 0, // Will be updated based on actual tenant data
+                    floorName: floorName,
+                    rent: rent,
+                    deposit: deposit,
+                    floorId: floorConfig.floorId
+                  });
+                  
+                  unitCounter++;
+                }
+              }
+            });
+          }
+        });
+        
+        // Update occupancy based on actual tenant data
+        try {
+          const allTenants = await tenantApiService.getTenantsByProperty(propertyId);
+          rooms.forEach(room => {
+            const roomTenants = allTenants.filter(tenant => tenant.roomId === room.roomNumber);
+            room.occupied = roomTenants.length;
+          });
+        } catch (error) {
+          console.error('Error loading tenant occupancy:', error);
         }
       }
       
-      // If no rooms found in mapping, create some default rooms with variety
-      if (rooms.length === 0) {
-        rooms.push(
-          { id: '101', name: 'Room 101 (Ground Floor)', roomNumber: '101', type: 'Single Room', unitType: 'room', sharingType: 'single', capacity: 1, occupied: 0, floorName: 'Ground Floor', rent: 5000, deposit: 10000 },
-          { id: '102', name: 'Room 102 (Ground Floor)', roomNumber: '102', type: 'Double Sharing', unitType: 'room', sharingType: 'double', capacity: 2, occupied: 0, floorName: 'Ground Floor', rent: 4000, deposit: 8000 },
-          { id: '201', name: '1 BHK 201 (1st Floor)', roomNumber: '201', type: '1 BHK Flat', unitType: 'bhk_1', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 8000, deposit: 16000 },
-          { id: '202', name: 'RK 202 (1st Floor)', roomNumber: '202', type: 'RK (Room + Kitchen)', unitType: 'rk', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 6000, deposit: 12000 },
-          { id: '301', name: '2 BHK 301 (2nd Floor)', roomNumber: '301', type: '2 BHK Flat', unitType: 'bhk_2', sharingType: 'single', capacity: 1, occupied: 0, floorName: '2nd Floor', rent: 12000, deposit: 24000 },
-          { id: '302', name: 'Studio 302 (2nd Floor)', roomNumber: '302', type: 'Studio Apartment', unitType: 'studio_apartment', sharingType: 'single', capacity: 1, occupied: 0, floorName: '2nd Floor', rent: 7000, deposit: 14000 },
-        );
-      }
-      
+      console.log('Generated rooms:', rooms);
       setAvailableRooms(rooms);
     } catch (error) {
       console.error('Error loading rooms:', error);
-      // Fallback to default rooms with variety if there's an error
+      // Fallback to default rooms if there's an error
       setAvailableRooms([
         { id: '101', name: 'Room 101 (Ground Floor)', roomNumber: '101', type: 'Single Room', unitType: 'room', sharingType: 'single', capacity: 1, occupied: 0, floorName: 'Ground Floor', rent: 5000, deposit: 10000 },
         { id: '102', name: 'Room 102 (Ground Floor)', roomNumber: '102', type: 'Double Sharing', unitType: 'room', sharingType: 'double', capacity: 2, occupied: 0, floorName: 'Ground Floor', rent: 4000, deposit: 8000 },
-        { id: '201', name: '1 BHK 201 (1st Floor)', roomNumber: '201', type: '1 BHK Flat', unitType: 'bhk_1', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 8000, deposit: 16000 },
-        { id: '202', name: 'RK 202 (1st Floor)', roomNumber: '202', type: 'RK (Room + Kitchen)', unitType: 'rk', sharingType: 'single', capacity: 1, occupied: 0, floorName: '1st Floor', rent: 6000, deposit: 12000 },
       ]);
     }
   };
