@@ -186,6 +186,11 @@ const getDefaultAmenitiesForSharingType = (sharingType: RoomSharingType): string
   }
 };
 
+// Helper function to determine room status based on tenant occupancy
+const getRoomStatus = (tenantCount: number): 'available' | 'occupied' | 'maintenance' | 'reserved' => {
+  return tenantCount > 0 ? 'occupied' : 'available';
+};
+
 const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation, route }) => {
   const { property } = route.params || {};
   const [units, setUnits] = useState<UnitWithDetails[]>([]);
@@ -281,7 +286,7 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                   rent: getDefaultRentForUnitType(unitType as UnitType),
                   deposit: getDefaultDepositForUnitType(unitType as UnitType),
                   amenities: getDefaultAmenitiesForUnitType(unitType as UnitType),
-                  status: 'available',
+                  status: 'available', // Will be updated based on tenant occupancy
                   currentTenants: [],
                   createdAt: new Date() as any,
                   updatedAt: new Date() as any,
@@ -308,7 +313,7 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                   rent: getDefaultRentForSharingType(sharingType as RoomSharingType),
                   deposit: getDefaultDepositForSharingType(sharingType as RoomSharingType),
                   amenities: getDefaultAmenitiesForSharingType(sharingType as RoomSharingType),
-                  status: 'available',
+                  status: 'available', // Will be updated based on tenant occupancy
                   currentTenants: [],
                   createdAt: new Date() as any,
                   updatedAt: new Date() as any,
@@ -371,6 +376,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                 return {
                   ...unit,
                   currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                  status: getRoomStatus(tenantDetails.filter(t => t.name !== 'Unknown Tenant').length),
+                  isOccupied: tenantDetails.filter(t => t.name !== 'Unknown Tenant').length > 0,
                 };
               }
               
@@ -387,6 +394,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
               const unitWithTenants = unitsWithTenants.find(u => u.id === unit.id);
               if (unitWithTenants) {
                 unit.currentTenants = unitWithTenants.currentTenants;
+                unit.status = unitWithTenants.status;
+                unit.isOccupied = unitWithTenants.isOccupied;
                 totalTenants += unitWithTenants.currentTenants.length;
                 if (unitWithTenants.currentTenants.length > 0) {
                   occupiedUnits++;
@@ -485,6 +494,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                 return {
                   ...unit,
                   currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                  status: getRoomStatus(tenantDetails.filter(t => t.name !== 'Unknown Tenant').length),
+                  isOccupied: tenantDetails.filter(t => t.name !== 'Unknown Tenant').length > 0,
                 };
               }
               
@@ -527,6 +538,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                 return {
                   ...unit,
                   currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                  status: getRoomStatus(tenantDetails.filter(t => t.name !== 'Unknown Tenant').length),
+                  isOccupied: tenantDetails.filter(t => t.name !== 'Unknown Tenant').length > 0,
                 };
               }
               
@@ -543,6 +556,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
               const unitWithTenants = unitsWithTenants.find(u => u.id === unit.id);
               if (unitWithTenants) {
                 unit.currentTenants = unitWithTenants.currentTenants;
+                unit.status = unitWithTenants.status;
+                unit.isOccupied = unitWithTenants.isOccupied;
                 totalTenants += unitWithTenants.currentTenants.length;
                 if (unitWithTenants.currentTenants.length > 0) {
                   occupiedUnits++;
