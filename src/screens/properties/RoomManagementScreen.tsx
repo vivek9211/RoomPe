@@ -322,7 +322,85 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
             floorsData.push(floor);
           });
           
-          setUnits(unitsData);
+          // Load all tenants for this property and match with units
+          const allTenants = await tenantApiService.getTenantsByProperty(property.id);
+          console.log('All tenants for property (config mode):', allTenants);
+          
+          // Match tenants with units based on roomId
+          const unitsWithTenants = await Promise.all(
+            unitsData.map(async (unit) => {
+              // Find tenants assigned to this unit by roomId
+              const unitTenants = allTenants.filter(tenant => 
+                tenant.roomId === unit.unitNumber || tenant.roomId === unit.id
+              );
+              
+              console.log(`Unit ${unit.unitNumber} (${unit.id}) tenants:`, unitTenants);
+              
+              if (unitTenants.length > 0) {
+                const tenantDetails = await Promise.all(
+                  unitTenants.map(async (tenant) => {
+                    try {
+                      const user = await firestoreService.getUserProfile(tenant.userId);
+                      return {
+                        id: tenant.id,
+                        name: user?.name || 'Unknown Tenant',
+                        phone: user?.phone || 'No Phone',
+                        email: user?.email || 'No Email',
+                        status: tenant.status,
+                        rent: tenant.rent,
+                        deposit: tenant.deposit,
+                        agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
+                        agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
+                      };
+                    } catch (error) {
+                      console.error('Error loading tenant details:', error);
+                      return {
+                        id: tenant.id,
+                        name: 'Unknown Tenant',
+                        phone: 'No Phone',
+                        email: 'No Email',
+                        status: TenantStatus.INACTIVE,
+                        rent: 0,
+                        deposit: 0,
+                        agreementStart: new Date(),
+                        agreementEnd: new Date(),
+                      };
+                    }
+                  })
+                );
+                return {
+                  ...unit,
+                  currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                };
+              }
+              
+              return unit;
+            })
+          );
+          
+          // Update floors with tenant information
+          floorsData.forEach(floor => {
+            let totalTenants = 0;
+            let occupiedUnits = 0;
+            
+            floor.units.forEach(unit => {
+              const unitWithTenants = unitsWithTenants.find(u => u.id === unit.id);
+              if (unitWithTenants) {
+                unit.currentTenants = unitWithTenants.currentTenants;
+                totalTenants += unitWithTenants.currentTenants.length;
+                if (unitWithTenants.currentTenants.length > 0) {
+                  occupiedUnits++;
+                }
+              }
+            });
+            
+            floor.tenantCount = totalTenants;
+            floor.filledUnits = occupiedUnits;
+            floor.vacantUnits = floor.totalUnits - occupiedUnits;
+            floor.occupancyRate = floor.totalUnits > 0 ? (occupiedUnits / floor.totalUnits) * 100 : 0;
+          });
+          
+          setUnits(unitsWithTenants);
           setFloors(floorsData);
           
         } else if (roomMapping.floors && Array.isArray(roomMapping.floors)) {
@@ -358,9 +436,59 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
             floorsData.push(floorWithTenants);
           });
           
+          // Load all tenants for this property
+          const allTenants = await tenantApiService.getTenantsByProperty(property.id);
+          console.log('All tenants for property:', allTenants);
+          
           // Load tenant details for occupied units
           const unitsWithTenants = await Promise.all(
             unitsData.map(async (unit) => {
+              // Find tenants assigned to this unit by roomId
+              const unitTenants = allTenants.filter(tenant => 
+                tenant.roomId === unit.unitNumber || tenant.roomId === unit.id
+              );
+              
+              console.log(`Unit ${unit.unitNumber} (${unit.id}) tenants:`, unitTenants);
+              
+              if (unitTenants.length > 0) {
+                const tenantDetails = await Promise.all(
+                  unitTenants.map(async (tenant) => {
+                    try {
+                      const user = await firestoreService.getUserProfile(tenant.userId);
+                      return {
+                        id: tenant.id,
+                        name: user?.name || 'Unknown Tenant',
+                        phone: user?.phone || 'No Phone',
+                        email: user?.email || 'No Email',
+                        status: tenant.status,
+                        rent: tenant.rent,
+                        deposit: tenant.deposit,
+                        agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
+                        agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
+                      };
+                    } catch (error) {
+                      console.error('Error loading tenant details:', error);
+                      return {
+                        id: tenant.id,
+                        name: 'Unknown Tenant',
+                        phone: 'No Phone',
+                        email: 'No Email',
+                        status: TenantStatus.INACTIVE,
+                        rent: 0,
+                        deposit: 0,
+                        agreementStart: new Date(),
+                        agreementEnd: new Date(),
+                      };
+                    }
+                  })
+                );
+                return {
+                  ...unit,
+                  currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                };
+              }
+              
+              // Also check for legacy tenantIds approach
               if (unit.tenantIds && unit.tenantIds.length > 0) {
                 const tenantDetails = await Promise.all(
                   unit.tenantIds.map(async (tenantId) => {
@@ -401,6 +529,7 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                   currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
                 };
               }
+              
               return unit;
             })
           );
@@ -454,6 +583,35 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
 
   const handleRefresh = () => {
     loadPropertyData();
+  };
+
+  const debugShowAllTenants = async () => {
+    try {
+      const allTenants = await tenantApiService.getTenantsByProperty(property.id);
+      console.log('=== ALL TENANTS DEBUG ===');
+      console.log('Total tenants:', allTenants.length);
+      allTenants.forEach((tenant, index) => {
+        console.log(`Tenant ${index + 1}:`, {
+          id: tenant.id,
+          roomId: tenant.roomId,
+          propertyId: tenant.propertyId,
+          status: tenant.status,
+          rent: tenant.rent,
+          deposit: tenant.deposit,
+          userId: tenant.userId
+        });
+      });
+      console.log('=== END DEBUG ===');
+      
+      Alert.alert(
+        'Debug Info', 
+        `Found ${allTenants.length} tenants. Check console for details.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Error fetching tenants for debug:', error);
+      Alert.alert('Error', 'Failed to fetch tenant data');
+    }
   };
 
   const handleVacateUnit = (unitId: string) => {
@@ -661,27 +819,32 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
         </Text>
       </View>
 
-             {unit.currentTenants.length > 0 && (
-         <View style={styles.tenantsSection}>
-           <Text style={styles.tenantsSectionTitle}>Current Tenants ({unit.currentTenants.length})</Text>
-           {unit.currentTenants.map((tenant, index) => (
-             <View key={tenant.id || `tenant-${index}`} style={styles.tenantItem}>
-               {renderTenantCard(tenant)}
-             </View>
-           ))}
-         </View>
-       )}
+      {/* Only show tenant details when this specific unit is selected */}
+      {selectedUnitId === unit.id && (
+        <>
+          {unit.currentTenants.length > 0 && (
+            <View style={styles.tenantsSection}>
+              <Text style={styles.tenantsSectionTitle}>Current Tenants ({unit.currentTenants.length})</Text>
+              {unit.currentTenants.map((tenant, index) => (
+                <View key={tenant.id || `tenant-${index}`} style={styles.tenantItem}>
+                  {renderTenantCard(tenant)}
+                </View>
+              ))}
+            </View>
+          )}
 
-      {unit.currentTenants.length === 0 && (
-        <View style={styles.emptyTenantsSection}>
-          <Text style={styles.emptyTenantsText}>No tenants assigned to this room</Text>
-          <TouchableOpacity 
-            style={styles.assignTenantButton}
-            onPress={() => navigation.navigate('AddTenant', { property, roomId: unit.id })}
-          >
-            <Text style={styles.assignTenantButtonText}>Assign Tenant</Text>
-          </TouchableOpacity>
-        </View>
+          {unit.currentTenants.length === 0 && (
+            <View style={styles.emptyTenantsSection}>
+              <Text style={styles.emptyTenantsText}>No tenants assigned to this room</Text>
+              <TouchableOpacity 
+                style={styles.assignTenantButton}
+                onPress={() => navigation.navigate('AddTenant', { property, roomId: unit.id })}
+              >
+                <Text style={styles.assignTenantButtonText}>Assign Tenant</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
       )}
     </View>
   );
@@ -759,7 +922,12 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           {selectedFloorId && selectedCategory && !selectedUnitId && `${selectedCategory.replace('_', ' ').toUpperCase()} - ${selectedFloor?.floorName}`}
           {selectedUnitId && `Room ${selectedUnit?.unitNumber}`}
         </Text>
-        <View style={{ width: 90 }} />
+        <TouchableOpacity 
+          style={styles.debugButton}
+          onPress={debugShowAllTenants}
+        >
+          <Text style={styles.debugButtonText}>Debug</Text>
+        </TouchableOpacity>
              </View>
 
        {/* Content */}
@@ -817,7 +985,57 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
          {selectedUnitId && (
            <View style={styles.unitDetailSection}>
              <Text style={styles.sectionTitle}>Room Details - {selectedUnit?.unitNumber}</Text>
-             {selectedUnit && renderUnitWithTenants(selectedUnit)}
+             {selectedUnit && (
+               <View style={styles.unitWithTenantsCard}>
+                 <View style={styles.unitHeader}>
+                   <View style={styles.unitInfo}>
+                     <Text style={styles.unitIcon}>{getUnitTypeIcon(selectedUnit.unitType)}</Text>
+                     <View style={styles.unitDetails}>
+                       <Text style={styles.unitNumber}>Room {selectedUnit.unitNumber}</Text>
+                       <Text style={styles.unitType}>
+                         {selectedUnit.unitType.replace('_', ' ').toUpperCase()}
+                         {selectedUnit.sharingType && ` - ${selectedUnit.sharingType.replace('_', ' ').toUpperCase()}`}
+                       </Text>
+                     </View>
+                   </View>
+                   <View style={[styles.unitStatus, { backgroundColor: getStatusColor(selectedUnit.status) }]}>
+                     <Text style={styles.unitStatusText}>{selectedUnit.status.toUpperCase()}</Text>
+                   </View>
+                 </View>
+                 
+                 <View style={styles.unitStats}>
+                   <Text style={styles.statText}>
+                     👥 Capacity: {selectedUnit.capacity} | Occupied: {selectedUnit.currentTenants.length}
+                   </Text>
+                   <Text style={styles.statText}>
+                     💰 Rent: ₹{selectedUnit.rent}/month | Deposit: ₹{selectedUnit.deposit}
+                   </Text>
+                 </View>
+
+                 {selectedUnit.currentTenants.length > 0 && (
+                   <View style={styles.tenantsSection}>
+                     <Text style={styles.tenantsSectionTitle}>Current Tenants ({selectedUnit.currentTenants.length})</Text>
+                     {selectedUnit.currentTenants.map((tenant, index) => (
+                       <View key={tenant.id || `tenant-${index}`} style={styles.tenantItem}>
+                         {renderTenantCard(tenant)}
+                       </View>
+                     ))}
+                   </View>
+                 )}
+
+                 {selectedUnit.currentTenants.length === 0 && (
+                   <View style={styles.emptyTenantsSection}>
+                     <Text style={styles.emptyTenantsText}>No tenants assigned to this room</Text>
+                     <TouchableOpacity 
+                       style={styles.assignTenantButton}
+                       onPress={() => navigation.navigate('AddTenant', { property, roomId: selectedUnit.id })}
+                     >
+                       <Text style={styles.assignTenantButtonText}>Assign Tenant</Text>
+                     </TouchableOpacity>
+                   </View>
+                 )}
+               </View>
+             )}
            </View>
          )}
 
@@ -1101,6 +1319,17 @@ const styles = StyleSheet.create({
      addFirstUnitButtonText: {
      color: colors.white,
      fontSize: fonts.md,
+     fontWeight: '500',
+   },
+   debugButton: {
+     backgroundColor: colors.warning,
+     paddingHorizontal: dimensions.spacing.sm,
+     paddingVertical: dimensions.spacing.xs,
+     borderRadius: dimensions.borderRadius.sm,
+   },
+   debugButtonText: {
+     color: colors.white,
+     fontSize: fonts.xs,
      fontWeight: '500',
    },
  });
