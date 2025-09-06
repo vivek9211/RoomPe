@@ -618,14 +618,59 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
       });
       console.log('=== END DEBUG ===');
       
-      Alert.alert(
-        'Debug Info', 
-        `Found ${allTenants.length} tenants. Check console for details.`,
-        [{ text: 'OK' }]
-      );
+      // Check if there are any pending tenants
+      const pendingTenants = allTenants.filter(tenant => tenant.status === 'pending');
+      
+      if (pendingTenants.length > 0) {
+        Alert.alert(
+          'Debug Info', 
+          `Found ${allTenants.length} tenants. ${pendingTenants.length} are pending. Would you like to activate them?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Activate Pending', 
+              onPress: () => activatePendingTenants(pendingTenants)
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Debug Info', 
+          `Found ${allTenants.length} tenants. All are active. Check console for details.`,
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
       console.error('Error fetching tenants for debug:', error);
       Alert.alert('Error', 'Failed to fetch tenant data');
+    }
+  };
+
+  const activatePendingTenants = async (pendingTenants: any[]) => {
+    try {
+      setLoading(true);
+      let activatedCount = 0;
+      
+      for (const tenant of pendingTenants) {
+        try {
+          await tenantApiService.activateTenant(tenant.id);
+          activatedCount++;
+          console.log(`Activated tenant ${tenant.id} (Room ${tenant.roomId})`);
+        } catch (error) {
+          console.error(`Failed to activate tenant ${tenant.id}:`, error);
+        }
+      }
+      
+      Alert.alert(
+        'Success', 
+        `Activated ${activatedCount} out of ${pendingTenants.length} pending tenants.`,
+        [{ text: 'OK', onPress: () => loadPropertyData() }]
+      );
+    } catch (error) {
+      console.error('Error activating tenants:', error);
+      Alert.alert('Error', 'Failed to activate some tenants');
+    } finally {
+      setLoading(false);
     }
   };
 

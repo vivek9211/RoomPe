@@ -25,7 +25,7 @@ class TenantApiService {
     try {
       const tenantDoc = {
         ...tenantData,
-        status: TenantStatus.PENDING,
+        status: TenantStatus.ACTIVE, // Set to ACTIVE when tenant is assigned to a room
         depositPaid: false,
         createdAt: firestore.FieldValue.serverTimestamp(),
         updatedAt: firestore.FieldValue.serverTimestamp(),
@@ -219,6 +219,20 @@ class TenantApiService {
     } catch (error) {
       console.error('Error updating tenant:', error);
       throw new Error('Failed to update tenant');
+    }
+  }
+
+  /**
+   * Update tenant status from pending to active
+   * @param tenantId - Tenant ID
+   */
+  async activateTenant(tenantId: string): Promise<void> {
+    try {
+      await this.updateTenant(tenantId, { status: TenantStatus.ACTIVE });
+      console.log('Tenant activated successfully:', tenantId);
+    } catch (error) {
+      console.error('Error activating tenant:', error);
+      throw new Error('Failed to activate tenant');
     }
   }
 
