@@ -11,6 +11,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, dimensions } from '../../constants';
 import { Property, PropertyType } from '../../types/property.types';
 import { 
@@ -193,6 +194,7 @@ const getRoomStatus = (tenantCount: number): 'available' | 'occupied' | 'mainten
 
 const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation, route }) => {
   const { property } = route.params || {};
+  const insets = useSafeAreaInsets();
   const [units, setUnits] = useState<UnitWithDetails[]>([]);
   const [rooms, setRooms] = useState<RoomWithBeds[]>([]);
   const [floors, setFloors] = useState<FloorWithTenants[]>([]);
@@ -954,7 +956,7 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
@@ -1129,7 +1131,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
-    height: 60,
     borderBottomWidth: 1,
     borderBottomColor: colors.lightGray,
   },
