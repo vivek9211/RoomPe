@@ -51,6 +51,7 @@ export interface CreateUserData {
 
 // Optional fields for user updates
 export interface UpdateUserData {
+  email?: string;
   name?: string;
   phone?: string;
   profilePhoto?: string;

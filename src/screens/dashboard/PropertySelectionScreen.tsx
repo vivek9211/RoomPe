@@ -48,6 +48,8 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
             id: firebaseProperty.id,
             name: firebaseProperty.name,
             ownerId: firebaseProperty.ownerId,
+            ownerName: firebaseProperty.ownerName,
+            ownerPhone: firebaseProperty.ownerPhone,
             type: firebaseProperty.type,
             status: firebaseProperty.status,
             location: firebaseProperty.location,
@@ -56,6 +58,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
             createdAt: firebaseProperty.createdAt,
             updatedAt: firebaseProperty.updatedAt,
             pricing: firebaseProperty.pricing,
+            contactInfo: firebaseProperty.contactInfo,
           }));
           
           setProperties(properties);
@@ -86,19 +89,25 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       const firebaseProperties = await firestoreService.getPropertiesByOwner(userProfile.uid);
       
       // Convert Firebase data to Property objects
-      const properties: Property[] = firebaseProperties.map((firebaseProperty: any) => ({
-        id: firebaseProperty.id,
-        name: firebaseProperty.name,
-        ownerId: firebaseProperty.ownerId,
-        type: firebaseProperty.type,
-        status: firebaseProperty.status,
-        location: firebaseProperty.location,
-        totalRooms: firebaseProperty.totalRooms,
-        availableRooms: firebaseProperty.availableRooms,
-        createdAt: firebaseProperty.createdAt,
-        updatedAt: firebaseProperty.updatedAt,
-        pricing: firebaseProperty.pricing,
-      }));
+      const properties: Property[] = firebaseProperties.map((firebaseProperty: any) => {
+        console.log('PropertySelection - Raw firebase property:', JSON.stringify(firebaseProperty, null, 2));
+        return {
+          id: firebaseProperty.id,
+          name: firebaseProperty.name,
+          ownerId: firebaseProperty.ownerId,
+          ownerName: firebaseProperty.ownerName,
+          ownerPhone: firebaseProperty.ownerPhone,
+          type: firebaseProperty.type,
+          status: firebaseProperty.status,
+          location: firebaseProperty.location,
+          totalRooms: firebaseProperty.totalRooms,
+          availableRooms: firebaseProperty.availableRooms,
+          createdAt: firebaseProperty.createdAt,
+          updatedAt: firebaseProperty.updatedAt,
+          pricing: firebaseProperty.pricing,
+          contactInfo: firebaseProperty.contactInfo,
+        };
+      });
       
       setProperties(properties);
       console.log('Properties loaded from Firebase:', properties);
@@ -220,6 +229,11 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
 
   const handleRoomManagement = (property: Property) => {
     navigation.navigate('RoomManagement', { property });
+  };
+
+  const handlePaymentKyc = (property: Property) => {
+    console.log('PropertySelection - Navigating to PaymentKyc with property:', JSON.stringify(property, null, 2));
+    navigation.navigate('PaymentKyc', { property });
   };
 
   const handleDeleteProperty = (property: Property) => {
@@ -428,42 +442,55 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       </View>
       
              {/* Property Actions */}
-       <View style={styles.propertyActions}>
-         <View style={styles.actionRow}>
-           <TouchableOpacity 
-             style={styles.actionButton}
-             onPress={() => handleViewDetails(property)}
-           >
-             <Text style={styles.actionButtonText}>View Details</Text>
-           </TouchableOpacity>
-           <TouchableOpacity 
-             style={styles.actionButton}
-             onPress={() => handleEditProperty(property)}
-           >
-             <Text style={styles.actionButtonText}>Edit</Text>
-           </TouchableOpacity>
-           <TouchableOpacity 
-             style={styles.actionButton}
-             onPress={() => handleRoomMapping(property)}
-           >
-             <Text style={styles.actionButtonText}>Floors</Text>
-           </TouchableOpacity>
-         </View>
-         <View style={styles.actionRow}>
-           <TouchableOpacity 
-             style={styles.actionButton}
-             onPress={() => handleRoomManagement(property)}
-           >
-             <Text style={styles.actionButtonText}>Room Management</Text>
-           </TouchableOpacity>
-           <TouchableOpacity 
-             style={[styles.actionButton, styles.deleteButton]}
-             onPress={() => handleDeleteProperty(property)}
-           >
-             <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
-           </TouchableOpacity>
-         </View>
-       </View>
+      <View style={styles.propertyActions}>
+        {/* Row 1: View Details + Edit */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleViewDetails(property)}
+          >
+            <Text style={styles.actionButtonText}>View Details</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleEditProperty(property)}
+          >
+            <Text style={styles.actionButtonText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Row 2: Floors + Room Management */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleRoomMapping(property)}
+          >
+            <Text style={styles.actionButtonText}>Floors</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleRoomManagement(property)}
+          >
+            <Text style={styles.actionButtonText}>Room Management</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Row 3: Payment KYC + Delete */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handlePaymentKyc(property)}
+          >
+            <Text style={styles.actionButtonText}>Payment KYC</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => handleDeleteProperty(property)}
+          >
+            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 

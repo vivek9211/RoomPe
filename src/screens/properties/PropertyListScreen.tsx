@@ -40,6 +40,8 @@ const PropertyListScreen: React.FC<PropertyListScreenProps> = ({ navigation }) =
             id: firebaseProperty.id,
             name: firebaseProperty.name,
             ownerId: firebaseProperty.ownerId,
+            ownerName: firebaseProperty.ownerName,
+            ownerPhone: firebaseProperty.ownerPhone,
             type: firebaseProperty.type,
             status: firebaseProperty.status,
             location: firebaseProperty.location,
@@ -48,6 +50,7 @@ const PropertyListScreen: React.FC<PropertyListScreenProps> = ({ navigation }) =
             createdAt: firebaseProperty.createdAt,
             updatedAt: firebaseProperty.updatedAt,
             pricing: firebaseProperty.pricing,
+            contactInfo: firebaseProperty.contactInfo,
           }));
           
           setProperties(properties);
@@ -193,6 +196,13 @@ const PropertyListScreen: React.FC<PropertyListScreenProps> = ({ navigation }) =
           onPress={() => handleEditProperty(property)}
         >
           <Text style={styles.editButtonText}>Edit</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.primaryButton]}
+          onPress={() => navigation.navigate('PaymentKyc', { property })}
+        >
+          <Text style={styles.primaryButtonText}>Payment KYC</Text>
         </TouchableOpacity>
       </View>
     </View>

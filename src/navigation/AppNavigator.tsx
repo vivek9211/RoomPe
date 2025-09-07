@@ -27,6 +27,7 @@ import PropertySelectionScreen from '../screens/dashboard/PropertySelectionScree
 // Property Screens
 import PropertyListScreen from '../screens/properties/PropertyListScreen';
 import PropertyDetailScreen from '../screens/properties/PropertyDetailScreen';
+import PaymentKycScreen from '../screens/properties/PaymentKycScreen';
 import AssignedPropertyDetailScreen from '../screens/properties/AssignedPropertyDetailScreen';
 import AddPropertyScreen from '../screens/properties/AddPropertyScreen';
 import EditPropertyScreen from '../screens/properties/EditPropertyScreen';
@@ -250,6 +251,7 @@ const AppNavigator = () => {
             <Stack.Screen name="PropertyDetail" component={PropertyDetailScreen} />
             <Stack.Screen name="AddProperty" component={AddPropertyScreen} />
             <Stack.Screen name="EditProperty" component={EditPropertyScreen} />
+            <Stack.Screen name="PaymentKyc" component={PaymentKycScreen} />
             
             {/* Room Mapping Screens */}
             <Stack.Screen name="RoomMapping" component={RoomMappingScreen} />

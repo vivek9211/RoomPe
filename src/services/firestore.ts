@@ -568,6 +568,25 @@ class FirestoreService {
   }
 
   /**
+   * Update payments/linked account details for a property (nested merge)
+   */
+  async updatePropertyPayments(
+    propertyId: string,
+    payments: { enabled?: boolean; linkedAccountId?: string; platformFeePercent?: number; notes?: string }
+  ): Promise<void> {
+    try {
+      const updateData: any = {
+        payments,
+        updatedAt: firestore.FieldValue.serverTimestamp(),
+      };
+      await this.propertiesCollection.doc(propertyId).set(updateData, { merge: true });
+    } catch (error) {
+      console.error('Error updating property payments:', error);
+      throw new Error('Failed to update property payments');
+    }
+  }
+
+  /**
    * Delete property from Firestore
    * @param propertyId - Property ID
    */

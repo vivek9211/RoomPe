@@ -135,6 +135,8 @@ export interface UpdatePropertyData {
 // Complete property model with all fields
 export interface Property extends BaseProperty {
   // Optional property details
+  ownerName?: string; // stored at root in existing docs
+  ownerPhone?: string; // stored at root in existing docs
   description?: string;
   amenities?: PropertyAmenities;
   rules?: PropertyRules;
