@@ -15,12 +15,12 @@ import {
   validateEmail, 
   validatePassword, 
   validateName,
-  validateRequired,
   validatePhoneNumber
 } from '../../utils/validation';
 import { useAuth } from '../../contexts/AuthContext';
 import firestoreService from '../../services/firestore';
 import auth from '@react-native-firebase/auth';
+import { UserRole } from '../../types/user.types';
 
 interface RegisterScreenProps {
   navigation: any; // Replace with proper navigation type
@@ -50,6 +50,13 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
+  // Toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  // Check if all required fields are filled for Google sign-up (no password required)
+  const isGoogleFormValid = fullName.trim() && email.trim() && phone.trim();
+
   const validateForm = (): boolean => {
     const fullNameValidation = validateName(fullName);
     const emailValidation = validateEmail(email);
@@ -72,6 +79,26 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
 
     return !fullNameValidation && !emailValidation && !passwordValidation && 
            !confirmPasswordValidation && !phoneValidation;
+  };
+
+  const validateRequiredFields = (): boolean => {
+    const fullNameValidation = validateName(fullName);
+    const emailValidation = validateEmail(email);
+    const phoneValidation = validatePhoneNumber(phone);
+
+    setFullNameError(fullNameValidation || '');
+    setEmailError(emailValidation || '');
+    setPhoneError(phoneValidation || '');
+
+    return !fullNameValidation && !emailValidation && !phoneValidation;
+  };
+
+  const showToastMessage = (message: string) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+    }, 3000); // Hide after 3 seconds
   };
 
   const handleRegister = async () => {
@@ -103,6 +130,12 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
   };
 
   const handleGoogleRegister = async () => {
+    // Validate required fields for Google sign-up (no password required)
+    if (!validateRequiredFields()) {
+      showToastMessage('Fill required fields first');
+      return;
+    }
+
     setIsGoogleLoading(true);
     
     try {
@@ -115,43 +148,32 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
         throw new Error('No authenticated user after Google sign-in');
       }
       
-      // Check if user already has a profile
-      let profile = null;
+      // Create user profile with the form data
+      await firestoreService.createUserProfile({
+        uid: currentUser.uid,
+        email,
+        name: fullName,
+        phone,
+        role: isOwner ? UserRole.OWNER : UserRole.TENANT,
+        onboardingCompleted: false, // Set to false to ensure email verification
+      });
+      
+      // Send email verification for Google users
       try {
-        profile = await firestoreService.getUserProfile(currentUser.uid);
-        console.log('Profile fetched:', profile);
-      } catch (error) {
-        console.log('Error fetching profile:', error);
-      }
-
-      // Check if user already exists
-      if (profile && profile.role) {
-        // User already exists with a role, check onboarding status
-        if (profile.onboardingCompleted) {
-          // User has completed onboarding, redirect to login
-          Alert.alert(
-            'Account Already Exists',
-            'An account with this Google email already exists. Please sign in instead.',
-            [
-              {
-                text: 'Go to Login',
-                onPress: () => {
-                  // Sign out the Google user since they should use existing account
-                  auth().signOut();
-                  navigation.navigate('Login');
-                }
-              }
-            ]
-          );
-        } else {
-          // User exists but hasn't completed onboarding, let AppNavigator handle routing
-          console.log('User exists but onboarding not completed - letting AppNavigator handle routing');
-        }
-      } else {
-        // New user or incomplete profile, go to RoleSelection
-        navigation.navigate('RoleSelection');
+        await currentUser.sendEmailVerification();
+      } catch (e) {
+        console.warn('Failed to send email verification for Google user:', e);
       }
       
+      console.log('Google Sign-Up successful:', { 
+        fullName, 
+        email, 
+        phone,
+        userType: isOwner ? 'Owner' : 'Tenant' 
+      });
+      
+      // Don't navigate here - let the AppNavigator handle the routing
+      // The user will be automatically redirected to EmailVerification
     } catch (error: any) {
       Alert.alert('Google Registration Failed', error.message || 'Unable to sign up with Google. Please try again.');
     } finally {
@@ -215,6 +237,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
               }}
               autoCapitalize="words"
               error={fullNameError}
+              required
             />
 
             <Input
@@ -228,6 +251,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
               keyboardType="email-address"
               autoCapitalize="none"
               error={emailError}
+              required
             />
 
             <Input
@@ -240,6 +264,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
               }}
               keyboardType="phone-pad"
               error={phoneError}
+              required
             />
 
             <Input
@@ -303,6 +328,13 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Toast Notification */}
+      {showToast && (
+        <View style={styles.toastContainer}>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -392,6 +424,27 @@ const styles = StyleSheet.create({
     fontSize: fonts.md,
     color: colors.primary,
     fontWeight: '600' as const,
+  },
+  toastContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: colors.error,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  toastText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    textAlign: 'center',
+    fontWeight: '500' as const,
   },
 });
 

@@ -93,8 +93,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
       console.log('Role value:', roleValue, 'Has valid role:', hasValidRole, 'Onboarding completed:', onboardingCompleted);
 
       if (!profile || !hasValidRole) {
-        console.log('Navigating to RoleSelection - Profile:', !!profile, 'Role:', roleValue);
-        navigation.navigate('RoleSelection');
+        console.log('No profile or invalid role - user needs to complete registration');
+        // User should complete registration instead of role selection
+        // Let the AppNavigator handle routing or show appropriate message
+        Alert.alert(
+          'Profile Incomplete', 
+          'Please complete your registration to continue. You will be redirected to the registration screen.'
+        );
+        // Navigate to registration to complete profile
+        navigation.navigate('Register');
       } else if (!onboardingCompleted) {
         console.log('Profile exists but onboarding not completed - letting AppNavigator handle routing');
         // Don't navigate here - let the AppNavigator handle the routing

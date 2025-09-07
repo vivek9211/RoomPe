@@ -164,6 +164,13 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
       return;
     }
 
+    // Validate property has required fields
+    if (!selectedProperty.id || !selectedProperty.ownerId) {
+      console.error('Property missing required fields:', selectedProperty);
+      Alert.alert('Error', 'Property data is incomplete. Please try again.');
+      return;
+    }
+
     try {
       setApplying(true);
 
@@ -171,10 +178,12 @@ const AssignPropertyScreen: React.FC<AssignPropertyScreenProps> = ({ navigation 
         tenantId: userProfile.uid,
         propertyId: selectedProperty.id,
         ownerId: selectedProperty.ownerId,
-        message: message.trim() || undefined,
-        requestedRent: requestedRent ? parseFloat(requestedRent) : undefined,
+        message: message.trim() || null,
+        requestedRent: requestedRent ? parseFloat(requestedRent) : null,
         requestedMoveInDate: firestore.Timestamp.now(), // Default to current date
       };
+
+      console.log('Submitting application with data:', applicationData);
 
       await firestoreService.createTenantApplication(applicationData);
 

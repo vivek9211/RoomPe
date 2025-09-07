@@ -27,6 +27,12 @@ interface TenantWithUserData extends Tenant {
     phone?: string;
   };
   application?: TenantApplication;
+  roomInfo?: {
+    roomNumber: string;
+    type: string;
+    capacity: number;
+    occupied: number;
+  };
 }
 
 const TenantListScreen: React.FC = () => {
@@ -105,6 +111,112 @@ const TenantListScreen: React.FC = () => {
     }
   };
 
+  const loadRoomInfoForTenants = async (tenants: Tenant[]) => {
+    try {
+      const tenantsWithRoomInfo = await Promise.all(
+        tenants.map(async (tenant) => {
+          try {
+            // Get room information from room mappings
+            const roomMapping = await firestoreService.getRoomMapping(tenant.propertyId);
+            if (roomMapping && roomMapping.floorConfigs) {
+              // Find the room in the floor configurations
+              for (const floor of roomMapping.floorConfigs) {
+                for (const unit of floor.units || []) {
+                  for (const room of unit.rooms || []) {
+                                         if (room.id === tenant.roomId) {
+                       return {
+                         ...tenant,
+                         roomInfo: {
+                           roomNumber: room.roomNumber || room.id.slice(-4), // Remove "Room" prefix
+                           type: room.type || 'single',
+                           capacity: room.capacity || 1,
+                           occupied: room.occupied || 1,
+                         }
+                       };
+                     }
+                  }
+                }
+              }
+            }
+            
+                         // If room mapping not found, try to get basic room info from roomId
+             if (tenant.roomId) {
+               // Extract a meaningful room number from roomId
+               let extractedRoomNumber = tenant.roomId;
+               
+               // If roomId contains "oom", extract the number after it
+               if (tenant.roomId.toLowerCase().includes('oom')) {
+                 const match = tenant.roomId.match(/oom(\d+)/i);
+                 if (match) {
+                   extractedRoomNumber = match[1]; // Just the number
+                 }
+               } else {
+                 // Otherwise, take the last 3-4 characters if they're numeric
+                 const numericMatch = tenant.roomId.match(/\d+$/);
+                 if (numericMatch) {
+                   extractedRoomNumber = numericMatch[0];
+                 } else {
+                   extractedRoomNumber = tenant.roomId.slice(-3); // Fallback
+                 }
+               }
+               
+               return {
+                 ...tenant,
+                 roomInfo: {
+                   roomNumber: extractedRoomNumber,
+                   type: 'single',
+                   capacity: 1,
+                   occupied: 1,
+                 }
+               };
+             }
+            
+            // If no roomId, return tenant without room info
+            return tenant;
+          } catch (error) {
+            console.error(`Error loading room info for tenant ${tenant.id}:`, error);
+                         // Fallback: create basic room info from roomId
+             if (tenant.roomId) {
+               // Extract a meaningful room number from roomId
+               let extractedRoomNumber = tenant.roomId;
+               
+               // If roomId contains "oom", extract the number after it
+               if (tenant.roomId.toLowerCase().includes('oom')) {
+                 const match = tenant.roomId.match(/oom(\d+)/i);
+                 if (match) {
+                   extractedRoomNumber = match[1]; // Just the number
+                 }
+               } else {
+                 // Otherwise, take the last 3-4 characters if they're numeric
+                 const numericMatch = tenant.roomId.match(/\d+$/);
+                 if (numericMatch) {
+                   extractedRoomNumber = numericMatch[0];
+                 } else {
+                   extractedRoomNumber = tenant.roomId.slice(-3); // Fallback
+                 }
+               }
+               
+               return {
+                 ...tenant,
+                 roomInfo: {
+                   roomNumber: extractedRoomNumber,
+                   type: 'single',
+                   capacity: 1,
+                   occupied: 1,
+                 }
+               };
+             }
+            return tenant;
+          }
+        })
+      );
+      return tenantsWithRoomInfo;
+    } catch (error) {
+      console.error('Error loading room info for tenants:', error);
+      return tenants;
+    }
+  };
+
   const loadTenants = async () => {
     if (selectedProperty) {
       await getTenantsByProperty(selectedProperty);
@@ -139,9 +251,12 @@ const TenantListScreen: React.FC = () => {
       }
 
       try {
+        // First load room information for all tenants
+        const tenantsWithRoomInfo = await loadRoomInfoForTenants(tenants);
+        
         const tenantsWithData: TenantWithUserData[] = [];
 
-        for (const tenant of tenants) {
+        for (const tenant of tenantsWithRoomInfo) {
           // Find the corresponding application
           const application = tenantApplications.find(app => 
             app.tenantId === tenant.userId && app.propertyId === tenant.propertyId
@@ -283,6 +398,70 @@ const TenantListScreen: React.FC = () => {
     }
   };
 
+  const getRoomDisplayText = (tenant: TenantWithUserData) => {
+    if (!tenant.roomInfo) {
+      return 'Room: Not Assigned';
+    }
+
+    const { roomNumber, type, capacity, occupied } = tenant.roomInfo;
+    
+    // Clean up room number - extract only the numeric part or meaningful identifier
+    let cleanRoomNumber = roomNumber;
+    
+    // Remove "Room" prefix if it exists
+    if (roomNumber.toLowerCase().startsWith('room ')) {
+      cleanRoomNumber = roomNumber.substring(5);
+    }
+    
+    // If the room number contains "oom" (like "oom3"), extract just the number
+    if (cleanRoomNumber.toLowerCase().includes('oom')) {
+      const match = cleanRoomNumber.match(/\d+/);
+      if (match) {
+        cleanRoomNumber = match[0]; // Just the number
+      }
+    }
+    
+    // If it's just a long ID, try to extract a meaningful number
+    if (cleanRoomNumber.length > 6 && !isNaN(parseInt(cleanRoomNumber))) {
+      cleanRoomNumber = cleanRoomNumber.slice(-3); // Take last 3 digits
+    }
+    
+    // Format room type for display
+    let typeDisplay = '';
+    switch (type) {
+      case 'single':
+        typeDisplay = 'Single Room';
+        break;
+      case 'double':
+        typeDisplay = 'Double Sharing';
+        break;
+      case 'triple':
+        typeDisplay = 'Triple Sharing';
+        break;
+      case 'quad':
+        typeDisplay = 'Quad Sharing';
+        break;
+      case 'deluxe':
+        typeDisplay = 'Deluxe Room';
+        break;
+      case 'ac':
+        typeDisplay = 'AC Room';
+        break;
+      case 'non_ac':
+        typeDisplay = 'Non-AC Room';
+        break;
+      default:
+        typeDisplay = type.charAt(0).toUpperCase() + type.slice(1);
+    }
+
+    // Show occupancy if it's a sharing room
+    if (capacity > 1) {
+      return `Room ${cleanRoomNumber} (${typeDisplay} - ${occupied}/${capacity})`;
+    } else {
+      return `Room ${cleanRoomNumber} (${typeDisplay})`;
+    }
+  };
+
   const handleAddTenant = () => {
     navigation.navigate('AddTenant');
   };
@@ -336,6 +515,10 @@ const TenantListScreen: React.FC = () => {
       </View>
       
       <View style={styles.tenantDetails}>
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Room:</Text>
+          <Text style={styles.roomDetailValue}>{getRoomDisplayText(item)}</Text>
+        </View>
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Rent:</Text>
           <Text style={styles.detailValue}>₹{item.rent.toLocaleString()}</Text>
@@ -638,6 +821,11 @@ const styles = StyleSheet.create({
     fontSize: fonts.sm,
     fontWeight: '500',
     color: colors.textPrimary,
+  },
+  roomDetailValue: {
+    fontSize: fonts.sm,
+    fontWeight: '600',
+    color: colors.primary,
   },
   tenantActions: {
     flexDirection: 'row',

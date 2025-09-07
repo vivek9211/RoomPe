@@ -121,7 +121,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         name,
         phone,
         role: role as any,
-        onboardingCompleted: true,
+        onboardingCompleted: false, // Set to false to ensure email verification
       });
 
       // Send email verification after successful signup

@@ -6,17 +6,27 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   Alert,
   RefreshControl,
-  Modal,
   FlatList,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
-import { Property } from '../../types/property.types';
-import { Room, RoomStatus, RoomType, RoomAmenities } from '../../types/room.types';
+import { Property, PropertyType } from '../../types/property.types';
+import { 
+  Room, 
+  RoomStatus, 
+  RoomType, 
+  RoomAmenities,
+  UnitType,
+  RoomSharingType,
+  Unit,
+  Floor
+} from '../../types/room.types';
+import { Tenant, TenantStatus } from '../../types/tenant.types';
+import { User } from '../../types/user.types';
 import { firestoreService } from '../../services/firestore';
+import { tenantApiService } from '../../services/api/tenantApi';
 
 interface RoomManagementScreenProps {
   navigation: any;
@@ -38,358 +48,908 @@ interface RoomWithBeds extends Room {
   beds: Bed[];
 }
 
+interface TenantDisplay {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  status: TenantStatus;
+  rent: number;
+  deposit: number;
+  agreementStart: Date;
+  agreementEnd: Date;
+}
+
+interface UnitWithDetails extends Unit {
+  currentTenants: TenantDisplay[];
+  amenities: string[];
+  status: 'available' | 'occupied' | 'maintenance' | 'reserved';
+}
+
+interface FloorWithTenants extends Floor {
+  units: UnitWithDetails[];
+  tenantCount: number;
+  occupancyRate: number;
+}
+
+// Helper functions
+const getOrdinalSuffix = (num: number): string => {
+  const j = num % 10;
+  const k = num % 100;
+  if (j === 1 && k !== 11) return 'st';
+  if (j === 2 && k !== 12) return 'nd';
+  if (j === 3 && k !== 13) return 'rd';
+  return 'th';
+};
+
+const getCapacityForUnitType = (unitType: UnitType): number => {
+  switch (unitType) {
+    case UnitType.BHK_1: return 2;
+    case UnitType.BHK_2: return 4;
+    case UnitType.BHK_3: return 6;
+    case UnitType.BHK_4: return 8;
+    case UnitType.BHK_5: return 10;
+    case UnitType.BHK_6: return 12;
+    case UnitType.STUDIO_APARTMENT: return 2;
+    case UnitType.RK: return 1;
+    default: return 1;
+  }
+};
+
+const getDefaultRentForUnitType = (unitType: UnitType): number => {
+  switch (unitType) {
+    case UnitType.BHK_1: return 15000;
+    case UnitType.BHK_2: return 25000;
+    case UnitType.BHK_3: return 35000;
+    case UnitType.BHK_4: return 45000;
+    case UnitType.BHK_5: return 55000;
+    case UnitType.BHK_6: return 65000;
+    case UnitType.STUDIO_APARTMENT: return 12000;
+    case UnitType.RK: return 10000;
+    default: return 8000;
+  }
+};
+
+const getDefaultDepositForUnitType = (unitType: UnitType): number => {
+  return getDefaultRentForUnitType(unitType) * 2;
+};
+
+const getDefaultAmenitiesForUnitType = (unitType: UnitType): string[] => {
+  switch (unitType) {
+    case UnitType.BHK_1:
+    case UnitType.BHK_2:
+    case UnitType.BHK_3:
+    case UnitType.BHK_4:
+    case UnitType.BHK_5:
+    case UnitType.BHK_6:
+      return ['AC', 'WiFi', 'Kitchen', 'Balcony', 'Parking'];
+    case UnitType.STUDIO_APARTMENT:
+      return ['AC', 'WiFi', 'Kitchen', 'Balcony'];
+    case UnitType.RK:
+      return ['AC', 'WiFi', 'Kitchen', 'Attached Bathroom'];
+    default:
+      return ['AC', 'WiFi'];
+  }
+};
+
+const getCapacityForSharingType = (sharingType: RoomSharingType): number => {
+  switch (sharingType) {
+    case RoomSharingType.SINGLE: return 1;
+    case RoomSharingType.DOUBLE: return 2;
+    case RoomSharingType.TRIPLE: return 3;
+    case RoomSharingType.FOUR_SHARING: return 4;
+    case RoomSharingType.FIVE_SHARING: return 5;
+    case RoomSharingType.SIX_SHARING: return 6;
+    case RoomSharingType.SEVEN_SHARING: return 7;
+    case RoomSharingType.EIGHT_SHARING: return 8;
+    case RoomSharingType.NINE_SHARING: return 9;
+    default: return 1;
+  }
+};
+
+const getDefaultRentForSharingType = (sharingType: RoomSharingType): number => {
+  switch (sharingType) {
+    case RoomSharingType.SINGLE: return 8000;
+    case RoomSharingType.DOUBLE: return 6000;
+    case RoomSharingType.TRIPLE: return 5000;
+    case RoomSharingType.FOUR_SHARING: return 4000;
+    case RoomSharingType.FIVE_SHARING: return 3500;
+    case RoomSharingType.SIX_SHARING: return 3000;
+    case RoomSharingType.SEVEN_SHARING: return 2800;
+    case RoomSharingType.EIGHT_SHARING: return 2500;
+    case RoomSharingType.NINE_SHARING: return 2200;
+    default: return 8000;
+  }
+};
+
+const getDefaultDepositForSharingType = (sharingType: RoomSharingType): number => {
+  return getDefaultRentForSharingType(sharingType) * 2;
+};
+
+const getDefaultAmenitiesForSharingType = (sharingType: RoomSharingType): string[] => {
+  switch (sharingType) {
+    case RoomSharingType.SINGLE:
+      return ['AC', 'WiFi', 'Food', 'Laundry'];
+    case RoomSharingType.DOUBLE:
+      return ['AC', 'WiFi', 'Food'];
+    case RoomSharingType.TRIPLE:
+      return ['AC', 'WiFi'];
+    case RoomSharingType.FOUR_SHARING:
+    case RoomSharingType.FIVE_SHARING:
+    case RoomSharingType.SIX_SHARING:
+    case RoomSharingType.SEVEN_SHARING:
+    case RoomSharingType.EIGHT_SHARING:
+    case RoomSharingType.NINE_SHARING:
+      return ['AC', 'WiFi'];
+    default:
+      return ['AC', 'WiFi'];
+  }
+};
+
+// Helper function to determine room status based on tenant occupancy
+const getRoomStatus = (tenantCount: number): 'available' | 'occupied' | 'maintenance' | 'reserved' => {
+  return tenantCount > 0 ? 'occupied' : 'available';
+};
+
 const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation, route }) => {
   const { property } = route.params || {};
+  const [units, setUnits] = useState<UnitWithDetails[]>([]);
   const [rooms, setRooms] = useState<RoomWithBeds[]>([]);
+  const [floors, setFloors] = useState<FloorWithTenants[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<RoomStatus | 'all'>('all');
-  const [showAddRoomModal, setShowAddRoomModal] = useState(false);
-  const [showAddBedModal, setShowAddBedModal] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState<RoomWithBeds | null>(null);
+     const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
+   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+   const [selectedCategory, setSelectedCategory] = useState<UnitType | null>(null);
+
+  // Form data
+  const [newUnitData, setNewUnitData] = useState({
+    unitNumber: '',
+    unitType: UnitType.ROOM,
+    sharingType: RoomSharingType.SINGLE,
+    capacity: 1,
+    rent: 0,
+    deposit: 0,
+    floorNumber: 1,
+    amenities: [] as string[],
+  });
+
   const [newRoomData, setNewRoomData] = useState({
     roomNumber: '',
     type: RoomType.SINGLE,
     capacity: 1,
     rent: 0,
     deposit: 0,
-  });
-  const [newBedData, setNewBedData] = useState({
-    bedNumber: '',
-    rent: 0,
-    deposit: 0,
+    floorNumber: 1,
   });
 
   useEffect(() => {
     if (property) {
-      loadRooms();
+      loadPropertyData();
     }
   }, [property]);
 
-  const loadRooms = async () => {
+  const loadPropertyData = async () => {
     if (!property?.id) return;
 
     setLoading(true);
     try {
-      // TODO: Implement actual room loading from Firestore
-      // For now, using mock data
-      const mockRooms: RoomWithBeds[] = [
-        {
-          id: '1',
-          propertyId: property.id,
-          roomNumber: '101',
-          type: RoomType.SINGLE,
-          status: RoomStatus.OCCUPIED,
-          capacity: 2,
-          occupied: 2,
-          pricing: { rent: 8000, deposit: 16000, currency: 'INR' },
-          createdAt: new Date() as any,
-          updatedAt: new Date() as any,
-          tenantIds: ['tenant1', 'tenant2'],
-          beds: [
-            {
-              id: 'bed1',
-              bedNumber: 'A',
-              isOccupied: true,
-              tenantId: 'tenant1',
-              tenantName: 'John Doe',
-              assignedAt: new Date(),
-              rent: 4000,
-              deposit: 8000,
-            },
-            {
-              id: 'bed2',
-              bedNumber: 'B',
-              isOccupied: true,
-              tenantId: 'tenant2',
-              tenantName: 'Jane Smith',
-              assignedAt: new Date(),
-              rent: 4000,
-              deposit: 8000,
-            },
-          ],
-        },
-        {
-          id: '2',
-          propertyId: property.id,
-          roomNumber: '102',
-          type: RoomType.DOUBLE,
-          status: RoomStatus.AVAILABLE,
-          capacity: 2,
-          occupied: 0,
-          pricing: { rent: 10000, deposit: 20000, currency: 'INR' },
-          createdAt: new Date() as any,
-          updatedAt: new Date() as any,
-          tenantIds: [],
-          beds: [
-            {
-              id: 'bed3',
-              bedNumber: 'A',
-              isOccupied: false,
-              rent: 5000,
-              deposit: 10000,
-            },
-            {
-              id: 'bed4',
-              bedNumber: 'B',
-              isOccupied: false,
-              rent: 5000,
-              deposit: 10000,
-            },
-          ],
-        },
-      ];
-      setRooms(mockRooms);
+      // Load room mapping data from Firestore
+      const roomMapping = await firestoreService.getRoomMapping(property.id);
+      
+      if (roomMapping) {
+        console.log('Room mapping loaded:', roomMapping);
+        
+        // Check if we have floorConfigs (configuration data) or floors (actual units)
+        if (roomMapping.floorConfigs && Array.isArray(roomMapping.floorConfigs)) {
+          // This is configuration data, we need to generate actual units
+          const floorsData: FloorWithTenants[] = [];
+          const unitsData: UnitWithDetails[] = [];
+          
+          roomMapping.floorConfigs.forEach((floorConfig: any, floorIndex: number) => {
+            const floorNumber = floorIndex + 1;
+            const floorName = floorNumber === 1 ? 'Ground Floor' : `${floorNumber - 1}${getOrdinalSuffix(floorNumber - 1)} Floor`;
+            
+            // Calculate total units for this floor
+            const totalUnits = Object.values(floorConfig.unitConfigs || {}).reduce((sum: number, count: any) => sum + (count || 0), 0);
+            const totalRooms = Object.values(floorConfig.roomConfigs || {}).reduce((sum: number, count: any) => sum + (count || 0), 0);
+            const floorTotalUnits = totalUnits + totalRooms;
+            
+            const floor: FloorWithTenants = {
+              id: `floor${floorNumber}`,
+              floorNumber,
+              floorName,
+              totalUnits: floorTotalUnits,
+              filledUnits: 0,
+              vacantUnits: floorTotalUnits,
+              units: [],
+              tenantCount: 0,
+              occupancyRate: 0,
+              createdAt: new Date() as any,
+              updatedAt: new Date() as any,
+            };
+            
+            // Generate units from configuration
+            let unitCounter = 1;
+            
+            // Generate BHK units
+            Object.entries(floorConfig.unitConfigs || {}).forEach(([unitType, count]) => {
+              for (let i = 0; i < (count as number); i++) {
+                const unitNumber = `${floorNumber}${String(unitCounter).padStart(2, '0')}`;
+                const unit: UnitWithDetails = {
+                  id: `${floor.id}_unit_${unitCounter}`,
+                  floorId: floor.id,
+                  unitNumber,
+                  unitType: unitType as UnitType,
+                  capacity: getCapacityForUnitType(unitType as UnitType),
+                  isOccupied: false,
+                  tenantIds: [],
+                  rent: getDefaultRentForUnitType(unitType as UnitType),
+                  deposit: getDefaultDepositForUnitType(unitType as UnitType),
+                  amenities: getDefaultAmenitiesForUnitType(unitType as UnitType),
+                  status: 'available', // Will be updated based on tenant occupancy
+                  currentTenants: [],
+                  createdAt: new Date() as any,
+                  updatedAt: new Date() as any,
+                };
+                unitsData.push(unit);
+                floor.units.push(unit);
+                unitCounter++;
+              }
+            });
+            
+            // Generate room units
+            Object.entries(floorConfig.roomConfigs || {}).forEach(([sharingType, count]) => {
+              for (let i = 0; i < (count as number); i++) {
+                const unitNumber = `${floorNumber}${String(unitCounter).padStart(2, '0')}`;
+                const unit: UnitWithDetails = {
+                  id: `${floor.id}_unit_${unitCounter}`,
+                  floorId: floor.id,
+                  unitNumber,
+                  unitType: UnitType.ROOM,
+                  sharingType: sharingType as RoomSharingType,
+                  capacity: getCapacityForSharingType(sharingType as RoomSharingType),
+                  isOccupied: false,
+                  tenantIds: [],
+                  rent: getDefaultRentForSharingType(sharingType as RoomSharingType),
+                  deposit: getDefaultDepositForSharingType(sharingType as RoomSharingType),
+                  amenities: getDefaultAmenitiesForSharingType(sharingType as RoomSharingType),
+                  status: 'available', // Will be updated based on tenant occupancy
+                  currentTenants: [],
+                  createdAt: new Date() as any,
+                  updatedAt: new Date() as any,
+                };
+                unitsData.push(unit);
+                floor.units.push(unit);
+                unitCounter++;
+              }
+            });
+            
+            floorsData.push(floor);
+          });
+          
+          // Load all tenants for this property and match with units
+          const allTenants = await tenantApiService.getTenantsByProperty(property.id);
+          console.log('All tenants for property (config mode):', allTenants);
+          
+          // Match tenants with units based on roomId
+          const unitsWithTenants = await Promise.all(
+            unitsData.map(async (unit) => {
+              // Find tenants assigned to this unit by roomId
+              const unitTenants = allTenants.filter(tenant => 
+                tenant.roomId === unit.unitNumber || tenant.roomId === unit.id
+              );
+              
+              console.log(`Unit ${unit.unitNumber} (${unit.id}) tenants:`, unitTenants);
+              
+              if (unitTenants.length > 0) {
+                const tenantDetails = await Promise.all(
+                  unitTenants.map(async (tenant) => {
+                    try {
+                      const user = await firestoreService.getUserProfile(tenant.userId);
+                      return {
+                        id: tenant.id,
+                        name: user?.name || 'Unknown Tenant',
+                        phone: user?.phone || 'No Phone',
+                        email: user?.email || 'No Email',
+                        status: tenant.status,
+                        rent: tenant.rent,
+                        deposit: tenant.deposit,
+                        agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
+                        agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
+                      };
+                    } catch (error) {
+                      console.error('Error loading tenant details:', error);
+                      return {
+                        id: tenant.id,
+                        name: 'Unknown Tenant',
+                        phone: 'No Phone',
+                        email: 'No Email',
+                        status: TenantStatus.INACTIVE,
+                        rent: 0,
+                        deposit: 0,
+                        agreementStart: new Date(),
+                        agreementEnd: new Date(),
+                      };
+                    }
+                  })
+                );
+                return {
+                  ...unit,
+                  currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                  status: getRoomStatus(tenantDetails.filter(t => t.name !== 'Unknown Tenant').length),
+                  isOccupied: tenantDetails.filter(t => t.name !== 'Unknown Tenant').length > 0,
+                };
+              }
+              
+              return unit;
+            })
+          );
+          
+          // Update floors with tenant information
+          floorsData.forEach(floor => {
+            let totalTenants = 0;
+            let occupiedUnits = 0;
+            
+            floor.units.forEach(unit => {
+              const unitWithTenants = unitsWithTenants.find(u => u.id === unit.id);
+              if (unitWithTenants) {
+                unit.currentTenants = unitWithTenants.currentTenants;
+                unit.status = unitWithTenants.status;
+                unit.isOccupied = unitWithTenants.isOccupied;
+                totalTenants += unitWithTenants.currentTenants.length;
+                if (unitWithTenants.currentTenants.length > 0) {
+                  occupiedUnits++;
+                }
+              }
+            });
+            
+            floor.tenantCount = totalTenants;
+            floor.filledUnits = occupiedUnits;
+            floor.vacantUnits = floor.totalUnits - occupiedUnits;
+            floor.occupancyRate = floor.totalUnits > 0 ? (occupiedUnits / floor.totalUnits) * 100 : 0;
+          });
+          
+          setUnits(unitsWithTenants);
+          setFloors(floorsData);
+          
+        } else if (roomMapping.floors && Array.isArray(roomMapping.floors)) {
+          // This is actual unit data
+          const floorsData: FloorWithTenants[] = [];
+          const unitsData: UnitWithDetails[] = [];
+          
+          // Process each floor and its units
+          roomMapping.floors.forEach((floor: any) => {
+            const floorWithTenants: FloorWithTenants = {
+              ...floor,
+              tenantCount: 0,
+              occupancyRate: 0,
+              units: [],
+            };
+            
+            if (floor.units && Array.isArray(floor.units)) {
+              floor.units.forEach((unit: any) => {
+                // Convert Firestore timestamp to Date
+                const unitWithDetails: UnitWithDetails = {
+                  ...unit,
+                  createdAt: unit.createdAt?.toDate?.() || new Date(),
+                  updatedAt: unit.updatedAt?.toDate?.() || new Date(),
+                  currentTenants: [], // Will be populated with tenant details
+                  amenities: unit.amenities || [],
+                  status: unit.status || 'available',
+                };
+                unitsData.push(unitWithDetails);
+                floorWithTenants.units.push(unitWithDetails);
+              });
+            }
+            
+            floorsData.push(floorWithTenants);
+          });
+          
+          // Load all tenants for this property
+          const allTenants = await tenantApiService.getTenantsByProperty(property.id);
+          console.log('All tenants for property:', allTenants);
+          
+          // Load tenant details for occupied units
+          const unitsWithTenants = await Promise.all(
+            unitsData.map(async (unit) => {
+              // Find tenants assigned to this unit by roomId
+              const unitTenants = allTenants.filter(tenant => 
+                tenant.roomId === unit.unitNumber || tenant.roomId === unit.id
+              );
+              
+              console.log(`Unit ${unit.unitNumber} (${unit.id}) tenants:`, unitTenants);
+              
+              if (unitTenants.length > 0) {
+                const tenantDetails = await Promise.all(
+                  unitTenants.map(async (tenant) => {
+                    try {
+                      const user = await firestoreService.getUserProfile(tenant.userId);
+                      return {
+                        id: tenant.id,
+                        name: user?.name || 'Unknown Tenant',
+                        phone: user?.phone || 'No Phone',
+                        email: user?.email || 'No Email',
+                        status: tenant.status,
+                        rent: tenant.rent,
+                        deposit: tenant.deposit,
+                        agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
+                        agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
+                      };
+                    } catch (error) {
+                      console.error('Error loading tenant details:', error);
+                      return {
+                        id: tenant.id,
+                        name: 'Unknown Tenant',
+                        phone: 'No Phone',
+                        email: 'No Email',
+                        status: TenantStatus.INACTIVE,
+                        rent: 0,
+                        deposit: 0,
+                        agreementStart: new Date(),
+                        agreementEnd: new Date(),
+                      };
+                    }
+                  })
+                );
+                return {
+                  ...unit,
+                  currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                  status: getRoomStatus(tenantDetails.filter(t => t.name !== 'Unknown Tenant').length),
+                  isOccupied: tenantDetails.filter(t => t.name !== 'Unknown Tenant').length > 0,
+                };
+              }
+              
+              // Also check for legacy tenantIds approach
+              if (unit.tenantIds && unit.tenantIds.length > 0) {
+                const tenantDetails = await Promise.all(
+                  unit.tenantIds.map(async (tenantId) => {
+                    try {
+                      const tenant = await tenantApiService.getTenantById(tenantId);
+                      if (tenant) {
+                        const user = await firestoreService.getUserProfile(tenant.userId);
+                        return {
+                          id: tenantId,
+                          name: user?.name || 'Unknown Tenant',
+                          phone: user?.phone || 'No Phone',
+                          email: user?.email || 'No Email',
+                          status: tenant.status,
+                          rent: tenant.rent,
+                          deposit: tenant.deposit,
+                          agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
+                          agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
+                        };
+                      }
+                    } catch (error) {
+                      console.error('Error loading tenant details:', error);
+                    }
+                    return {
+                      id: tenantId,
+                      name: 'Unknown Tenant',
+                      phone: 'No Phone',
+                      email: 'No Email',
+                      status: TenantStatus.INACTIVE,
+                      rent: 0,
+                      deposit: 0,
+                      agreementStart: new Date(),
+                      agreementEnd: new Date(),
+                    };
+                  })
+                );
+                return {
+                  ...unit,
+                  currentTenants: tenantDetails.filter(t => t.name !== 'Unknown Tenant'),
+                  status: getRoomStatus(tenantDetails.filter(t => t.name !== 'Unknown Tenant').length),
+                  isOccupied: tenantDetails.filter(t => t.name !== 'Unknown Tenant').length > 0,
+                };
+              }
+              
+              return unit;
+            })
+          );
+          
+          // Update floors with tenant information
+          floorsData.forEach(floor => {
+            let totalTenants = 0;
+            let occupiedUnits = 0;
+            
+            floor.units.forEach(unit => {
+              const unitWithTenants = unitsWithTenants.find(u => u.id === unit.id);
+              if (unitWithTenants) {
+                unit.currentTenants = unitWithTenants.currentTenants;
+                unit.status = unitWithTenants.status;
+                unit.isOccupied = unitWithTenants.isOccupied;
+                totalTenants += unitWithTenants.currentTenants.length;
+                if (unitWithTenants.currentTenants.length > 0) {
+                  occupiedUnits++;
+                }
+              }
+            });
+            
+            floor.tenantCount = totalTenants;
+            floor.filledUnits = occupiedUnits;
+            floor.vacantUnits = floor.totalUnits - occupiedUnits;
+            floor.occupancyRate = floor.totalUnits > 0 ? (occupiedUnits / floor.totalUnits) * 100 : 0;
+          });
+          
+          setUnits(unitsWithTenants);
+          setFloors(floorsData);
+        }
+        
+        // Set rooms data if available (for backward compatibility)
+        if (roomMapping.rooms) {
+          setRooms(roomMapping.rooms);
+        }
+        
+        console.log('Property data loaded successfully');
+      } else {
+        console.log('No room mapping found for property:', property.id);
+        // Set empty data if no room mapping exists
+        setUnits([]);
+        setFloors([]);
+        setRooms([]);
+      }
     } catch (error) {
-      console.error('Error loading rooms:', error);
-      Alert.alert('Error', 'Failed to load rooms');
+      console.error('Error loading property data:', error);
+      Alert.alert('Error', 'Failed to load property data from Firestore');
     } finally {
       setLoading(false);
     }
   };
 
   const handleRefresh = () => {
-    loadRooms();
+    loadPropertyData();
   };
 
-  const handleAddRoom = () => {
-    if (!newRoomData.roomNumber || newRoomData.rent <= 0) {
-      Alert.alert('Error', 'Please fill all required fields');
-      return;
+  const debugShowAllTenants = async () => {
+    try {
+      const allTenants = await tenantApiService.getTenantsByProperty(property.id);
+      console.log('=== ALL TENANTS DEBUG ===');
+      console.log('Total tenants:', allTenants.length);
+      allTenants.forEach((tenant, index) => {
+        console.log(`Tenant ${index + 1}:`, {
+          id: tenant.id,
+          roomId: tenant.roomId,
+          propertyId: tenant.propertyId,
+          status: tenant.status,
+          rent: tenant.rent,
+          deposit: tenant.deposit,
+          userId: tenant.userId
+        });
+      });
+      console.log('=== END DEBUG ===');
+      
+      // Check if there are any pending tenants
+      const pendingTenants = allTenants.filter(tenant => tenant.status === 'pending');
+      
+      if (pendingTenants.length > 0) {
+        Alert.alert(
+          'Debug Info', 
+          `Found ${allTenants.length} tenants. ${pendingTenants.length} are pending. Would you like to activate them?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Activate Pending', 
+              onPress: () => activatePendingTenants(pendingTenants)
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Debug Info', 
+          `Found ${allTenants.length} tenants. All are active. Check console for details.`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching tenants for debug:', error);
+      Alert.alert('Error', 'Failed to fetch tenant data');
     }
-
-    const newRoom: RoomWithBeds = {
-      id: Date.now().toString(),
-      propertyId: property.id,
-      roomNumber: newRoomData.roomNumber,
-      type: newRoomData.type,
-      status: RoomStatus.AVAILABLE,
-      capacity: newRoomData.capacity,
-      occupied: 0,
-      pricing: {
-        rent: newRoomData.rent,
-        deposit: newRoomData.deposit,
-        currency: 'INR',
-      },
-      createdAt: new Date() as any,
-      updatedAt: new Date() as any,
-      tenantIds: [],
-      beds: [],
-    };
-
-    setRooms(prev => [...prev, newRoom]);
-    setNewRoomData({ roomNumber: '', type: RoomType.SINGLE, capacity: 1, rent: 0, deposit: 0 });
-    setShowAddRoomModal(false);
-    Alert.alert('Success', 'Room added successfully');
   };
 
-  const handleAddBed = () => {
-    if (!selectedRoom || !newBedData.bedNumber) {
-      Alert.alert('Error', 'Please fill all required fields');
-      return;
+  const activatePendingTenants = async (pendingTenants: any[]) => {
+    try {
+      setLoading(true);
+      let activatedCount = 0;
+      
+      for (const tenant of pendingTenants) {
+        try {
+          await tenantApiService.activateTenant(tenant.id);
+          activatedCount++;
+          console.log(`Activated tenant ${tenant.id} (Room ${tenant.roomId})`);
+        } catch (error) {
+          console.error(`Failed to activate tenant ${tenant.id}:`, error);
+        }
+      }
+      
+      Alert.alert(
+        'Success', 
+        `Activated ${activatedCount} out of ${pendingTenants.length} pending tenants.`,
+        [{ text: 'OK', onPress: () => loadPropertyData() }]
+      );
+    } catch (error) {
+      console.error('Error activating tenants:', error);
+      Alert.alert('Error', 'Failed to activate some tenants');
+    } finally {
+      setLoading(false);
     }
-
-    const newBed: Bed = {
-      id: Date.now().toString(),
-      bedNumber: newBedData.bedNumber,
-      isOccupied: false,
-      rent: newBedData.rent,
-      deposit: newBedData.deposit,
-    };
-
-    const updatedRooms = rooms.map(room =>
-      room.id === selectedRoom.id
-        ? { ...room, beds: [...room.beds, newBed] }
-        : room
-    );
-
-    setRooms(updatedRooms);
-    setNewBedData({ bedNumber: '', rent: 0, deposit: 0 });
-    setShowAddBedModal(false);
-    setSelectedRoom(null);
-    Alert.alert('Success', 'Bed added successfully');
   };
 
-  const handleAssignTenant = (roomId: string, bedId: string) => {
-    // TODO: Implement tenant assignment logic
-    Alert.alert('Info', 'Tenant assignment feature coming soon!');
-  };
-
-  const handleVacateBed = (roomId: string, bedId: string) => {
+  const handleVacateUnit = (unitId: string) => {
     Alert.alert(
-      'Vacate Bed',
-      'Are you sure you want to vacate this bed?',
+      'Vacate Unit',
+      'Are you sure you want to vacate this unit?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Vacate',
           style: 'destructive',
-          onPress: () => {
-            const updatedRooms = rooms.map(room =>
-              room.id === roomId
-                ? {
-                    ...room,
-                    beds: room.beds.map(bed =>
-                      bed.id === bedId
-                        ? { ...bed, isOccupied: false, tenantId: undefined, tenantName: undefined, assignedAt: undefined }
-                        : bed
-                    ),
-                    occupied: room.beds.filter(bed => bed.isOccupied).length,
-                    status: room.beds.every(bed => !bed.isOccupied) ? RoomStatus.AVAILABLE : RoomStatus.OCCUPIED,
-                  }
-                : room
-            );
-            setRooms(updatedRooms);
-            Alert.alert('Success', 'Bed vacated successfully');
+          onPress: async () => {
+            try {
+              if (!property?.id) return;
+              
+              // Update the unit in the room mapping
+              const roomMapping = await firestoreService.getRoomMapping(property.id);
+              if (roomMapping && roomMapping.floors) {
+                const updatedFloors = roomMapping.floors.map((floor: any) => ({
+                  ...floor,
+                  units: floor.units?.map((unit: any) => 
+                    unit.id === unitId
+                      ? {
+                          ...unit,
+                          isOccupied: false,
+                          tenantIds: [],
+                          status: 'available',
+                          updatedAt: new Date(),
+                        }
+                      : unit
+                  ) || []
+                }));
+
+                // Save updated room mapping to Firestore
+                await firestoreService.createOrUpdateRoomMapping(property.id, {
+                  totalFloors: roomMapping.totalFloors,
+                  floorConfigs: updatedFloors,
+                });
+
+                // Update local state
+                const updatedUnits = units.map(unit =>
+                  unit.id === unitId
+                    ? {
+                        ...unit,
+                        isOccupied: false,
+                        tenantIds: [],
+                        currentTenants: [],
+                        status: 'available' as const,
+                      }
+                    : unit
+                );
+                setUnits(updatedUnits);
+                Alert.alert('Success', 'Unit vacated successfully');
+              }
+            } catch (error) {
+              console.error('Error vacating unit:', error);
+              Alert.alert('Error', 'Failed to vacate unit. Please try again.');
+            }
           },
         },
       ]
     );
   };
 
-  const handleEditRoom = (room: RoomWithBeds) => {
-    // TODO: Implement room editing
-    Alert.alert('Info', 'Room editing feature coming soon!');
+  const getUnitTypeIcon = (unitType: UnitType) => {
+    switch (unitType) {
+      case UnitType.ROOM: return '🏠';
+      case UnitType.RK: return '🏡';
+      case UnitType.BHK_1: return '🏢';
+      case UnitType.BHK_2: return '🏢';
+      case UnitType.BHK_3: return '🏢';
+      case UnitType.STUDIO_APARTMENT: return '🏬';
+      default: return '🏠';
+    }
   };
 
-  const handleDeleteRoom = (roomId: string) => {
-    Alert.alert(
-      'Delete Room',
-      'Are you sure you want to delete this room? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setRooms(prev => prev.filter(room => room.id !== roomId));
-            Alert.alert('Success', 'Room deleted successfully');
-          },
-        },
-      ]
-    );
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'available': return colors.success;
+      case 'occupied': return colors.primary;
+      case 'maintenance': return colors.warning;
+      case 'reserved': return colors.info;
+      default: return colors.gray;
+    }
   };
 
-  const filteredRooms = rooms.filter(room => {
-    const matchesSearch = room.roomNumber.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || room.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const getTenantStatusColor = (status: TenantStatus) => {
+    switch (status) {
+      case TenantStatus.ACTIVE: return colors.success;
+      case TenantStatus.PENDING: return colors.warning;
+      case TenantStatus.INACTIVE: return colors.gray;
+      case TenantStatus.LEFT: return colors.error;
+      case TenantStatus.SUSPENDED: return colors.warning;
+      case TenantStatus.EVICTED: return colors.error;
+      default: return colors.gray;
+    }
+  };
 
-  const renderBed = (bed: Bed, room: RoomWithBeds) => (
-    <View key={bed.id} style={styles.bedCard}>
-      <View style={styles.bedHeader}>
-        <Text style={styles.bedNumber}>Bed {bed.bedNumber}</Text>
-        <View style={[styles.bedStatus, { backgroundColor: bed.isOccupied ? colors.error : colors.success }]}>
-          <Text style={styles.bedStatusText}>
-            {bed.isOccupied ? 'Occupied' : 'Available'}
+  const renderUnitCard = (unit: UnitWithDetails) => (
+    <TouchableOpacity key={unit.id} style={styles.unitCard} onPress={() => setSelectedUnitId(unit.id)}>
+      <View style={styles.unitHeader}>
+        <View style={styles.unitInfo}>
+          <Text style={styles.unitIcon}>{getUnitTypeIcon(unit.unitType)}</Text>
+          <View style={styles.unitDetails}>
+            <Text style={styles.unitNumber}>Unit {unit.unitNumber}</Text>
+            <Text style={styles.unitType}>
+              {unit.unitType.replace('_', ' ').toUpperCase()}
+              {unit.sharingType && ` - ${unit.sharingType.replace('_', ' ').toUpperCase()}`}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.unitStatus, { backgroundColor: getStatusColor(unit.status) }]}>
+          <Text style={styles.unitStatusText}>{unit.status.toUpperCase()}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.unitStats}>
+        <Text style={styles.statText}>
+          👥 Capacity: {unit.capacity} | Occupied: {unit.currentTenants.length}
+        </Text>
+        <Text style={styles.statText}>
+          💰 Rent: ₹{unit.rent}/month | Deposit: ₹{unit.deposit}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderFloorCard = (floor: FloorWithTenants) => (
+    <TouchableOpacity key={floor.id} style={styles.unitCard} onPress={() => {
+      setSelectedFloorId(floor.id);
+      setSelectedCategory(null);
+      setSelectedUnitId(null);
+    }}>
+      <View style={styles.floorHeader}>
+        <Text style={styles.floorTitle}>{floor.floorName}</Text>
+        <View style={styles.floorStats}>
+          <Text style={styles.floorStatText}>
+            {floor.filledUnits}/{floor.totalUnits} occupied
+          </Text>
+          <Text style={styles.floorStatText}>
+            {Math.round((floor.filledUnits / Math.max(1, floor.totalUnits)) * 100)}% occupancy
           </Text>
         </View>
       </View>
       
-      {bed.isOccupied ? (
-        <View style={styles.tenantInfo}>
-          <Text style={styles.tenantName}>👤 {bed.tenantName}</Text>
-          <Text style={styles.tenantDetails}>
-            Rent: ₹{bed.rent}/month | Deposit: ₹{bed.deposit}
-          </Text>
-          <Text style={styles.assignedDate}>
-            Assigned: {bed.assignedAt?.toLocaleDateString()}
-          </Text>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.vacateButton]}
-            onPress={() => handleVacateBed(room.id, bed.id)}
-          >
-            <Text style={styles.actionButtonText}>Vacate Bed</Text>
-          </TouchableOpacity>
+      <View style={styles.floorTenantInfo}>
+        <Text style={styles.tenantCountText}>
+          👥 Total Tenants: {floor.tenantCount}
+        </Text>
+        <Text style={styles.occupancyRateText}>
+          📊 Occupancy Rate: {Math.round(floor.occupancyRate)}%
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderTenantCard = (tenant: TenantDisplay) => (
+    <View style={styles.tenantCard}>
+      <View style={styles.tenantHeader}>
+        <Text style={styles.tenantName}>{tenant.name}</Text>
+        <View style={[styles.tenantStatus, { backgroundColor: getTenantStatusColor(tenant.status) }]}>
+          <Text style={styles.tenantStatusText}>{tenant.status.toUpperCase()}</Text>
         </View>
-      ) : (
-        <View style={styles.availableBed}>
-          <Text style={styles.availableText}>Available for rent</Text>
-          <Text style={styles.bedPricing}>
-            Rent: ₹{bed.rent}/month | Deposit: ₹{bed.deposit}
-          </Text>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.assignButton]}
-            onPress={() => handleAssignTenant(room.id, bed.id)}
-          >
-            <Text style={styles.actionButtonText}>Assign Tenant</Text>
-          </TouchableOpacity>
+      </View>
+      
+      <View style={styles.tenantDetails}>
+        <Text style={styles.tenantDetailText}>📞 {tenant.phone}</Text>
+        <Text style={styles.tenantDetailText}>📧 {tenant.email}</Text>
+        <Text style={styles.tenantDetailText}>💰 Rent: ₹{tenant.rent}/month</Text>
+        <Text style={styles.tenantDetailText}>💳 Deposit: ₹{tenant.deposit}</Text>
+        <Text style={styles.tenantDetailText}>
+          📅 Agreement: {tenant.agreementStart.toLocaleDateString()} - {tenant.agreementEnd.toLocaleDateString()}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderUnitWithTenants = (unit: UnitWithDetails) => (
+    <View style={styles.unitWithTenantsCard}>
+      <TouchableOpacity 
+        style={styles.unitHeader} 
+        onPress={() => setSelectedUnitId(unit.id)}
+      >
+        <View style={styles.unitInfo}>
+          <Text style={styles.unitIcon}>{getUnitTypeIcon(unit.unitType)}</Text>
+          <View style={styles.unitDetails}>
+            <Text style={styles.unitNumber}>Room {unit.unitNumber}</Text>
+            <Text style={styles.unitType}>
+              {unit.unitType.replace('_', ' ').toUpperCase()}
+              {unit.sharingType && ` - ${unit.sharingType.replace('_', ' ').toUpperCase()}`}
+            </Text>
+          </View>
         </View>
+        <View style={[styles.unitStatus, { backgroundColor: getStatusColor(unit.status) }]}>
+          <Text style={styles.unitStatusText}>{unit.status.toUpperCase()}</Text>
+        </View>
+      </TouchableOpacity>
+      
+      <View style={styles.unitStats}>
+        <Text style={styles.statText}>
+          👥 Capacity: {unit.capacity} | Occupied: {unit.currentTenants.length}
+        </Text>
+        <Text style={styles.statText}>
+          💰 Rent: ₹{unit.rent}/month | Deposit: ₹{unit.deposit}
+        </Text>
+      </View>
+
+      {/* Only show tenant details when this specific unit is selected */}
+      {selectedUnitId === unit.id && (
+        <>
+          {unit.currentTenants.length > 0 && (
+            <View style={styles.tenantsSection}>
+              <Text style={styles.tenantsSectionTitle}>Current Tenants ({unit.currentTenants.length})</Text>
+              {unit.currentTenants.map((tenant, index) => (
+                <View key={tenant.id || `tenant-${index}`} style={styles.tenantItem}>
+                  {renderTenantCard(tenant)}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {unit.currentTenants.length === 0 && (
+            <View style={styles.emptyTenantsSection}>
+              <Text style={styles.emptyTenantsText}>No tenants assigned to this room</Text>
+              <TouchableOpacity 
+                style={styles.assignTenantButton}
+                onPress={() => navigation.navigate('AddTenant', { property, roomId: unit.id })}
+              >
+                <Text style={styles.assignTenantButtonText}>Assign Tenant</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
       )}
     </View>
   );
 
-  const renderRoom = (room: RoomWithBeds) => (
-    <View key={room.id} style={styles.roomCard}>
-      <View style={styles.roomHeader}>
-        <View style={styles.roomInfo}>
-          <Text style={styles.roomNumber}>Room {room.roomNumber}</Text>
-          <Text style={styles.roomType}>{room.type}</Text>
+  const renderCategoryCard = (category: UnitType) => (
+    <TouchableOpacity
+      key={category}
+      style={styles.unitCard}
+      onPress={() => {
+        setSelectedCategory(category);
+        setSelectedUnitId(null);
+      }}
+    >
+      <View style={styles.unitHeader}>
+        <View style={styles.unitInfo}>
+          <Text style={styles.unitIcon}>{getUnitTypeIcon(category)}</Text>
+          <View style={styles.unitDetails}>
+            <Text style={styles.unitNumber}>{category.replace('_', ' ').toUpperCase()}</Text>
+            <Text style={styles.unitType}>
+              {category.replace('_', ' ').toUpperCase()}
+            </Text>
+          </View>
         </View>
-        <View style={[styles.roomStatus, { backgroundColor: getStatusColor(room.status) }]}>
-          <Text style={styles.roomStatusText}>{room.status}</Text>
+        <View style={[styles.unitStatus, { backgroundColor: colors.lightGray }]}>
+          <Text style={styles.unitStatusText}>Category</Text>
         </View>
       </View>
-      
-      <View style={styles.roomStats}>
-        <Text style={styles.statText}>
-          🏠 Capacity: {room.capacity} | Occupied: {room.occupied}
-        </Text>
-        <Text style={styles.statText}>
-          💰 Rent: ₹{room.pricing.rent}/month | Deposit: ₹{room.pricing.deposit}
-        </Text>
-      </View>
-      
-      <View style={styles.bedsContainer}>
-        <View style={styles.bedsHeader}>
-          <Text style={styles.bedsTitle}>Beds ({room.beds.length})</Text>
-          <TouchableOpacity
-            style={styles.addBedButton}
-            onPress={() => {
-              setSelectedRoom(room);
-              setShowAddBedModal(true);
-            }}
-          >
-            <Text style={styles.addBedButtonText}>+ Add Bed</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {room.beds.length > 0 ? (
-          room.beds.map(bed => renderBed(bed, room))
-        ) : (
-          <Text style={styles.noBedsText}>No beds added yet</Text>
-        )}
-      </View>
-      
-      <View style={styles.roomActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
-          onPress={() => handleEditRoom(room)}
-        >
-          <Text style={styles.actionButtonText}>Edit Room</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => handleDeleteRoom(room.id)}
-        >
-          <Text style={styles.actionButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </TouchableOpacity>
   );
 
-  const getStatusColor = (status: RoomStatus) => {
-    switch (status) {
-      case RoomStatus.AVAILABLE: return colors.success;
-      case RoomStatus.OCCUPIED: return colors.primary;
-      case RoomStatus.MAINTENANCE: return colors.warning;
-      case RoomStatus.RESERVED: return colors.info;
-      case RoomStatus.RENOVATION: return colors.error;
-      default: return colors.gray;
-    }
+  const getFloorCategories = (floorId: string) => {
+    const floor = floors.find(f => f.id === floorId);
+    if (!floor) return [];
+
+    const categories: UnitType[] = [];
+    units.forEach(unit => {
+      if (unit.floorId === floorId && !categories.includes(unit.unitType)) {
+        categories.push(unit.unitType);
+      }
+    });
+    return categories;
   };
+
+  const selectedFloor = floors.find(f => f.id === selectedFloorId) || null;
+  const selectedUnit = units.find(u => u.id === selectedUnitId) || null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -397,194 +957,163 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            if (selectedUnitId) {
+              setSelectedUnitId(null);
+              setSelectedCategory(null);
+              return;
+            }
+            if (selectedCategory) {
+              setSelectedCategory(null);
+              return;
+            }
+            if (selectedFloorId) {
+              setSelectedFloorId(null);
+              return;
+            }
+            navigation.goBack();
+          }}
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Room Management</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddRoomModal(true)}
+        <Text style={styles.headerTitle}>
+          {!selectedFloorId && !selectedUnitId && 'Room Management'}
+          {selectedFloorId && !selectedCategory && !selectedUnitId && selectedFloor?.floorName}
+          {selectedFloorId && selectedCategory && !selectedUnitId && `${selectedCategory.replace('_', ' ').toUpperCase()} - ${selectedFloor?.floorName}`}
+          {selectedUnitId && `Room ${selectedUnit?.unitNumber}`}
+        </Text>
+        <TouchableOpacity 
+          style={styles.debugButton}
+          onPress={debugShowAllTenants}
         >
-          <Text style={styles.addButtonText}>+ Add Room</Text>
+          <Text style={styles.debugButtonText}>Debug</Text>
         </TouchableOpacity>
-      </View>
+             </View>
 
-      {/* Search and Filters */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search rooms..."
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-        
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-          {['all', ...Object.values(RoomStatus)].map(status => (
-            <TouchableOpacity
-              key={status}
-              style={[
-                styles.filterChip,
-                filterStatus === status && styles.filterChipActive
-              ]}
-              onPress={() => setFilterStatus(status as RoomStatus | 'all')}
-            >
-              <Text style={[
-                styles.filterChipText,
-                filterStatus === status && styles.filterChipTextActive
-              ]}>
-                {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+       {/* Content */}
+       <ScrollView
+         style={styles.unitsList}
+         showsVerticalScrollIndicator={false}
+         refreshControl={
+           <RefreshControl
+             refreshing={loading}
+             onRefresh={handleRefresh}
+             colors={[colors.primary]}
+             tintColor={colors.primary}
+           />
+         }
+       >
+                   {!selectedFloorId && !selectedUnitId && (
+            <>
+              <View style={styles.floorSection}>
+                <Text style={styles.sectionTitle}>Floors Overview</Text>
+                {floors.map((floor, index) => (
+                  <View key={floor.id || `floor-${index}`}>
+                    {renderFloorCard(floor)}
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+         
+         {selectedFloorId && !selectedCategory && !selectedUnitId && (
+           <View style={styles.categorySection}>
+             <Text style={styles.sectionTitle}>Room Categories - {selectedFloor?.floorName}</Text>
+             {getFloorCategories(selectedFloorId).map((category, index) => (
+               <View key={category || `category-${index}`}>
+                 {renderCategoryCard(category)}
+               </View>
+             ))}
+           </View>
+         )}
+         
+         {selectedFloorId && selectedCategory && !selectedUnitId && (
+           <View style={styles.unitsSection}>
+             <Text style={styles.sectionTitle}>
+               {selectedCategory.replace('_', ' ').toUpperCase()} Rooms - {selectedFloor?.floorName}
+             </Text>
+             {units
+               .filter(unit => unit.floorId === selectedFloorId && unit.unitType === selectedCategory)
+               .map((unit, index) => (
+                 <View key={unit.id || `unit-${index}`}>
+                   {renderUnitWithTenants(unit)}
+                 </View>
+               ))}
+           </View>
+         )}
+         
+         {selectedUnitId && (
+           <View style={styles.unitDetailSection}>
+             <Text style={styles.sectionTitle}>Room Details - {selectedUnit?.unitNumber}</Text>
+             {selectedUnit && (
+               <View style={styles.unitWithTenantsCard}>
+                 <View style={styles.unitHeader}>
+                   <View style={styles.unitInfo}>
+                     <Text style={styles.unitIcon}>{getUnitTypeIcon(selectedUnit.unitType)}</Text>
+                     <View style={styles.unitDetails}>
+                       <Text style={styles.unitNumber}>Room {selectedUnit.unitNumber}</Text>
+                       <Text style={styles.unitType}>
+                         {selectedUnit.unitType.replace('_', ' ').toUpperCase()}
+                         {selectedUnit.sharingType && ` - ${selectedUnit.sharingType.replace('_', ' ').toUpperCase()}`}
+                       </Text>
+                     </View>
+                   </View>
+                   <View style={[styles.unitStatus, { backgroundColor: getStatusColor(selectedUnit.status) }]}>
+                     <Text style={styles.unitStatusText}>{selectedUnit.status.toUpperCase()}</Text>
+                   </View>
+                 </View>
+                 
+                 <View style={styles.unitStats}>
+                   <Text style={styles.statText}>
+                     👥 Capacity: {selectedUnit.capacity} | Occupied: {selectedUnit.currentTenants.length}
+                   </Text>
+                   <Text style={styles.statText}>
+                     💰 Rent: ₹{selectedUnit.rent}/month | Deposit: ₹{selectedUnit.deposit}
+                   </Text>
+                 </View>
 
-      {/* Rooms List */}
-      <ScrollView
-        style={styles.roomsList}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {filteredRooms.map(renderRoom)}
-        
-        {!loading && filteredRooms.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No rooms found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {searchQuery || filterStatus !== 'all' 
-                ? 'Try adjusting your search or filters' 
-                : 'Add your first room to start managing your property'
-              }
-            </Text>
-            {!searchQuery && filterStatus === 'all' && (
-              <TouchableOpacity
-                style={styles.addFirstRoomButton}
-                onPress={() => setShowAddRoomModal(true)}
-              >
-                <Text style={styles.addFirstRoomButtonText}>Add Your First Room</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </ScrollView>
+                 {selectedUnit.currentTenants.length > 0 && (
+                   <View style={styles.tenantsSection}>
+                     <Text style={styles.tenantsSectionTitle}>Current Tenants ({selectedUnit.currentTenants.length})</Text>
+                     {selectedUnit.currentTenants.map((tenant, index) => (
+                       <View key={tenant.id || `tenant-${index}`} style={styles.tenantItem}>
+                         {renderTenantCard(tenant)}
+                       </View>
+                     ))}
+                   </View>
+                 )}
 
-      {/* Add Room Modal */}
-      <Modal
-        visible={showAddRoomModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddRoomModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Room</Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Room Number (e.g., 101)"
-              value={newRoomData.roomNumber}
-              onChangeText={(text) => setNewRoomData(prev => ({ ...prev, roomNumber: text }))}
-            />
-            
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Rent (₹)"
-                keyboardType="numeric"
-                value={newRoomData.rent.toString()}
-                onChangeText={(text) => setNewRoomData(prev => ({ ...prev, rent: parseInt(text) || 0 }))}
-              />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Deposit (₹)"
-                keyboardType="numeric"
-                value={newRoomData.deposit.toString()}
-                onChangeText={(text) => setNewRoomData(prev => ({ ...prev, deposit: parseInt(text) || 0 }))}
-              />
-            </View>
-            
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowAddRoomModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleAddRoom}
-              >
-                <Text style={styles.saveButtonText}>Add Room</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+                 {selectedUnit.currentTenants.length === 0 && (
+                   <View style={styles.emptyTenantsSection}>
+                     <Text style={styles.emptyTenantsText}>No tenants assigned to this room</Text>
+                     <TouchableOpacity 
+                       style={styles.assignTenantButton}
+                       onPress={() => navigation.navigate('AddTenant', { property, roomId: selectedUnit.id })}
+                     >
+                       <Text style={styles.assignTenantButtonText}>Assign Tenant</Text>
+                     </TouchableOpacity>
+                   </View>
+                 )}
+               </View>
+             )}
+           </View>
+         )}
 
-      {/* Add Bed Modal */}
-      <Modal
-        visible={showAddBedModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddBedModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Bed to Room {selectedRoom?.roomNumber}</Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Bed Number (e.g., A, B, 1, 2)"
-              value={newBedData.bedNumber}
-              onChangeText={(text) => setNewBedData(prev => ({ ...prev, bedNumber: text }))}
-            />
-            
-            <View style={styles.row}>
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Rent (₹)"
-                keyboardType="numeric"
-                value={newBedData.rent.toString()}
-                onChangeText={(text) => setNewBedData(prev => ({ ...prev, rent: parseInt(text) || 0 }))}
-              />
-              <TextInput
-                style={[styles.input, styles.halfInput]}
-                placeholder="Deposit (₹)"
-                keyboardType="numeric"
-                value={newBedData.deposit.toString()}
-                onChangeText={(text) => setNewBedData(prev => ({ ...prev, deposit: parseInt(text) || 0 }))}
-              />
-            </View>
-            
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowAddBedModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleAddBed}
-              >
-                <Text style={styles.saveButtonText}>Add Bed</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+         {units.length === 0 && !loading && (
+           <View style={styles.emptyState}>
+             <Text style={styles.emptyStateText}>No rooms configured yet</Text>
+             <Text style={styles.emptyStateSubtext}>
+               Set up your room mapping to start managing tenants
+             </Text>
+             <TouchableOpacity
+               style={styles.addFirstUnitButton}
+               onPress={() => navigation.navigate('RoomMapping', { property })}
+             >
+               <Text style={styles.addFirstUnitButtonText}>Configure Rooms</Text>
+             </TouchableOpacity>
+           </View>
+         )}
+       </ScrollView>
     </SafeAreaView>
   );
 };
@@ -595,97 +1124,65 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.white,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
-    height: 56,
+    height: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
   },
   backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.backgroundLight,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: dimensions.spacing.md,
   },
   backIcon: {
-    fontSize: 24,
-    color: colors.white,
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontSize: fonts.lg,
-    fontWeight: '600',
-    color: colors.white,
-    flex: 1,
-  },
-  addButton: {
-    backgroundColor: colors.white,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.sm,
-  },
-  addButtonText: {
-    color: colors.primary,
-    fontSize: fonts.sm,
-    fontWeight: '500',
-  },
-  searchContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.md,
-    paddingHorizontal: dimensions.spacing.md,
-    height: 48,
-    marginBottom: dimensions.spacing.md,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchIcon: {
-    fontSize: 20,
-    marginRight: dimensions.spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: fonts.md,
+    fontSize: fonts.xl,
     color: colors.textPrimary,
   },
-  filterContainer: {
-    marginBottom: dimensions.spacing.sm,
+     headerTitle: {
+     flex: 1,
+     fontSize: fonts.lg,
+     fontWeight: '600',
+     color: colors.textPrimary,
+     textAlign: 'center',
+   },
+   unitsList: {
+     flex: 1,
+     paddingHorizontal: dimensions.spacing.lg,
+   },
+  sectionTitle: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.md,
+    marginTop: dimensions.spacing.lg,
   },
-  filterChip: {
-    backgroundColor: colors.white,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.sm,
-    marginRight: dimensions.spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.lightGray,
+  floorSection: {
+    marginBottom: dimensions.spacing.lg,
   },
-  filterChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  categorySection: {
+    marginBottom: dimensions.spacing.lg,
   },
-  filterChipText: {
-    color: colors.textSecondary,
-    fontSize: fonts.sm,
-    fontWeight: '500',
+  unitsSection: {
+    marginBottom: dimensions.spacing.lg,
   },
-  filterChipTextActive: {
-    color: colors.white,
+  unitDetailSection: {
+    marginBottom: dimensions.spacing.lg,
   },
-  roomsList: {
-    flex: 1,
-    paddingHorizontal: dimensions.spacing.lg,
+  listViewSection: {
+    marginBottom: dimensions.spacing.lg,
   },
-  roomCard: {
+  unitCard: {
     backgroundColor: colors.white,
     borderRadius: dimensions.borderRadius.md,
-    padding: dimensions.spacing.lg,
+    padding: dimensions.spacing.md,
     marginBottom: dimensions.spacing.md,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
@@ -693,161 +1190,165 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  roomHeader: {
+  floorHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
   },
-  roomInfo: {
-    flex: 1,
-  },
-  roomNumber: {
+  floorTitle: {
     fontSize: fonts.lg,
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  roomType: {
+  floorStats: {
+    alignItems: 'flex-end',
+  },
+  floorStatText: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
-    marginTop: 2,
   },
-  roomStatus: {
+  floorTenantInfo: {
+    marginTop: dimensions.spacing.sm,
+    paddingTop: dimensions.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+  },
+  tenantCountText: {
+    fontSize: fonts.sm,
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.xs,
+  },
+  occupancyRateText: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+  },
+  unitHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.sm,
+  },
+  unitInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  unitIcon: {
+    fontSize: fonts.xl,
+    marginRight: dimensions.spacing.sm,
+  },
+  unitDetails: {
+    flex: 1,
+  },
+  unitNumber: {
+    fontSize: fonts.md,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  unitType: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+  },
+  unitStatus: {
     paddingHorizontal: dimensions.spacing.sm,
     paddingVertical: dimensions.spacing.xs,
     borderRadius: dimensions.borderRadius.sm,
   },
-  roomStatusText: {
-    color: colors.white,
-    fontSize: fonts.sm,
+  unitStatusText: {
+    fontSize: fonts.xs,
     fontWeight: '500',
+    color: colors.white,
   },
-  roomStats: {
-    marginBottom: dimensions.spacing.md,
+  unitStats: {
+    marginTop: dimensions.spacing.sm,
   },
   statText: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: dimensions.spacing.xs,
   },
-  bedsContainer: {
-    marginBottom: dimensions.spacing.md,
-  },
-  bedsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: dimensions.spacing.sm,
-  },
-  bedsTitle: {
-    fontSize: fonts.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  addBedButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: dimensions.spacing.sm,
-    paddingVertical: dimensions.spacing.xs,
-    borderRadius: dimensions.borderRadius.sm,
-  },
-  addBedButtonText: {
-    color: colors.white,
-    fontSize: fonts.sm,
-    fontWeight: '500',
-  },
-  noBedsText: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: dimensions.spacing.md,
-  },
-  bedCard: {
+  tenantCard: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: dimensions.borderRadius.sm,
     padding: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.sm,
     marginBottom: dimensions.spacing.sm,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
   },
-  bedHeader: {
+  tenantHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: dimensions.spacing.sm,
-  },
-  bedNumber: {
-    fontSize: fonts.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  bedStatus: {
-    paddingHorizontal: dimensions.spacing.sm,
-    paddingVertical: 2,
-    borderRadius: dimensions.borderRadius.sm,
-  },
-  bedStatusText: {
-    color: colors.white,
-    fontSize: fonts.xs,
-    fontWeight: '500',
-  },
-  tenantInfo: {
     marginBottom: dimensions.spacing.sm,
   },
   tenantName: {
     fontSize: fonts.md,
-    fontWeight: '500',
+    fontWeight: '600',
     color: colors.textPrimary,
-    marginBottom: 4,
+    flex: 1,
+  },
+  tenantStatus: {
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: dimensions.borderRadius.sm,
+  },
+  tenantStatusText: {
+    fontSize: fonts.xs,
+    fontWeight: '500',
+    color: colors.white,
   },
   tenantDetails: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-    marginBottom: 2,
+    gap: dimensions.spacing.xs,
   },
-  assignedDate: {
+  tenantDetailText: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
+  },
+  unitWithTenantsCard: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.md,
+    padding: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tenantsSection: {
+    marginTop: dimensions.spacing.md,
+    paddingTop: dimensions.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+  },
+  tenantsSectionTitle: {
+    fontSize: fonts.md,
+    fontWeight: '600',
+    color: colors.textPrimary,
     marginBottom: dimensions.spacing.sm,
   },
-  availableBed: {
+  tenantItem: {
     marginBottom: dimensions.spacing.sm,
   },
-  availableText: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  bedPricing: {
-    fontSize: fonts.sm,
-    color: colors.textSecondary,
-    marginBottom: dimensions.spacing.sm,
-  },
-  roomActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: dimensions.spacing.sm,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: dimensions.spacing.sm,
-    paddingHorizontal: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.sm,
+  emptyTenantsSection: {
+    marginTop: dimensions.spacing.md,
+    paddingTop: dimensions.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
     alignItems: 'center',
   },
-  editButton: {
-    backgroundColor: colors.warning,
+  emptyTenantsText: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+    marginBottom: dimensions.spacing.md,
+    textAlign: 'center',
   },
-  deleteButton: {
-    backgroundColor: colors.error,
+  assignTenantButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.lg,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.sm,
   },
-  assignButton: {
-    backgroundColor: colors.success,
-  },
-  vacateButton: {
-    backgroundColor: colors.error,
-  },
-  actionButtonText: {
+  assignTenantButtonText: {
     color: colors.white,
     fontSize: fonts.sm,
     fontWeight: '500',
@@ -869,82 +1370,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: dimensions.spacing.lg,
   },
-  addFirstRoomButton: {
+  addFirstUnitButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.md,
     borderRadius: dimensions.borderRadius.md,
   },
-  addFirstRoomButtonText: {
-    color: colors.white,
-    fontSize: fonts.md,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: colors.white,
-    borderRadius: dimensions.borderRadius.lg,
-    padding: dimensions.spacing.xl,
-    width: '90%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: fonts.lg,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.lg,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.lightGray,
-    borderRadius: dimensions.borderRadius.sm,
-    paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.sm,
-    fontSize: fonts.md,
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.md,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: dimensions.spacing.md,
-  },
-  halfInput: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: dimensions.spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.sm,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: colors.lightGray,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-  },
-  cancelButtonText: {
-    color: colors.textSecondary,
-    fontSize: fonts.md,
-    fontWeight: '500',
-  },
-  saveButtonText: {
-    color: colors.white,
-    fontSize: fonts.md,
-    fontWeight: '500',
-  },
-});
+     addFirstUnitButtonText: {
+     color: colors.white,
+     fontSize: fonts.md,
+     fontWeight: '500',
+   },
+   debugButton: {
+     backgroundColor: colors.warning,
+     paddingHorizontal: dimensions.spacing.sm,
+     paddingVertical: dimensions.spacing.xs,
+     borderRadius: dimensions.borderRadius.sm,
+   },
+   debugButtonText: {
+     color: colors.white,
+     fontSize: fonts.xs,
+     fontWeight: '500',
+   },
+ });
 
 export default RoomManagementScreen;
+

@@ -112,8 +112,9 @@ export interface CreatePropertyData {
   name: string;
   ownerId: string;
   type: PropertyType;
+  ownerName: string;
+  ownerPhone: string;
   location: PropertyLocation;
-  totalRooms: number;
   pricing: PropertyPricing;
 }
 

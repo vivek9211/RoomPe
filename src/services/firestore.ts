@@ -11,6 +11,7 @@ export const COLLECTIONS = {
   NOTIFICATIONS: 'notifications',
   ROOM_MAPPINGS: 'room_mappings',
   TENANT_APPLICATIONS: 'tenant_applications',
+  TENANTS: 'tenants',
 } as const;
 
 // Firestore service class for all Firestore operations
@@ -33,6 +34,11 @@ class FirestoreService {
   // Tenant Applications collection
   private get tenantApplicationsCollection() {
     return firestore().collection(COLLECTIONS.TENANT_APPLICATIONS);
+  }
+
+  // Tenants collection
+  private get tenantsCollection() {
+    return firestore().collection(COLLECTIONS.TENANTS);
   }
 
   // ==================== USER OPERATIONS ====================
@@ -287,6 +293,127 @@ class FirestoreService {
     } catch (error) {
       console.error('Error fetching users by role:', error);
       throw new Error('Failed to fetch users by role');
+    }
+  }
+
+  /**
+   * Get available users (not already assigned to any property)
+   * @param role - User role to filter by
+   * @param limit - Maximum number of results
+   * @returns Array of available users with the specified role
+   */
+  async getAvailableUsers(role: UserRole, limit: number = 50): Promise<User[]> {
+    try {
+      // First get all users with the specified role
+      const allUsers = await this.getUsersByRole(role, limit);
+      
+      // Get all existing tenants to find assigned users
+      const tenantsSnapshot = await this.tenantsCollection.get();
+      const assignedUserIds = new Set<string>();
+      
+      tenantsSnapshot.forEach((doc: FirebaseFirestoreTypes.QueryDocumentSnapshot) => {
+        const tenantData = doc.data();
+        if (tenantData.userId) {
+          assignedUserIds.add(tenantData.userId);
+        }
+      });
+      
+      // Filter out users who are already assigned to properties
+      const availableUsers = allUsers.filter(user => !assignedUserIds.has(user.uid));
+      
+      return availableUsers;
+    } catch (error) {
+      console.error('Error fetching available users:', error);
+      throw new Error('Failed to fetch available users');
+    }
+  }
+
+  /**
+   * Get available tenants with approved applications and no room assignments
+   * @param ownerId - Property owner ID
+   * @param limit - Maximum number of results
+   * @returns Array of available tenants with approved applications
+   */
+  async getAvailableTenantsWithApprovedApplications(ownerId: string, limit: number = 50): Promise<User[]> {
+    try {
+      // Get approved tenant applications for this owner
+      const approvedApplicationsSnapshot = await firestore()
+        .collection(COLLECTIONS.TENANT_APPLICATIONS)
+        .where('ownerId', '==', ownerId)
+        .where('status', '==', 'approved')
+        .get();
+
+      const approvedTenantIds = new Set<string>();
+      approvedApplicationsSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.tenantId) {
+          approvedTenantIds.add(data.tenantId);
+        }
+      });
+
+      if (approvedTenantIds.size === 0) {
+        return [];
+      }
+
+      // Get all existing tenants to find assigned users
+      const tenantsSnapshot = await this.tenantsCollection.get();
+      const assignedUserIds = new Set<string>();
+      
+      tenantsSnapshot.forEach((doc: FirebaseFirestoreTypes.QueryDocumentSnapshot) => {
+        const tenantData = doc.data();
+        if (tenantData.userId) {
+          assignedUserIds.add(tenantData.userId);
+        }
+      });
+
+      // Get user profiles for approved tenants who are not assigned to any room
+      const availableTenantIds = Array.from(approvedTenantIds).filter(
+        tenantId => !assignedUserIds.has(tenantId)
+      );
+
+      if (availableTenantIds.length === 0) {
+        return [];
+      }
+
+      // Fetch user profiles for available tenants
+      const users: User[] = [];
+      for (const tenantId of availableTenantIds.slice(0, limit)) {
+        try {
+          const userDoc = await this.usersCollection.doc(tenantId).get();
+          if (userDoc.exists) {
+            const data = userDoc.data();
+            if (data && data.role === UserRole.TENANT) {
+              users.push({
+                uid: userDoc.id,
+                email: data?.email || '',
+                name: data?.name || '',
+                phone: data?.phone || '',
+                role: data?.role || UserRole.TENANT,
+                status: data?.status || UserStatus.ACTIVE,
+                createdAt: data?.createdAt || firestore.Timestamp.now(),
+                updatedAt: data?.updatedAt || firestore.Timestamp.now(),
+                isActive: data?.isActive ?? true,
+                emailVerified: data?.emailVerified ?? false,
+                phoneVerified: data?.phoneVerified ?? false,
+                profilePhoto: data?.profilePhoto,
+                lastLoginAt: data?.lastLoginAt,
+                address: data?.address,
+                dateOfBirth: data?.dateOfBirth,
+                emergencyContact: data?.emergencyContact,
+                preferences: data?.preferences,
+                metadata: data?.metadata,
+              } as User);
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching user ${tenantId}:`, error);
+        }
+      }
+
+      return users;
+    } catch (error) {
+      console.error('Error fetching available tenants with approved applications:', error);
+      throw new Error('Failed to fetch available tenants with approved applications');
     }
   }
 
@@ -726,8 +853,27 @@ class FirestoreService {
    */
   async createTenantApplication(applicationData: any): Promise<string> {
     try {
+      console.log('Creating tenant application with data:', JSON.stringify(applicationData, null, 2));
+      
+      // Validate required fields
+      if (!applicationData.tenantId || !applicationData.propertyId || !applicationData.ownerId) {
+        console.error('Missing required fields:', {
+          tenantId: applicationData.tenantId,
+          propertyId: applicationData.propertyId,
+          ownerId: applicationData.ownerId
+        });
+        throw new Error('Missing required fields: tenantId, propertyId, or ownerId');
+      }
+
+      // Filter out undefined values to prevent Firestore errors
+      const cleanApplicationData = Object.fromEntries(
+        Object.entries(applicationData).filter(([_, value]) => value !== undefined)
+      );
+
+      console.log('Cleaned application data:', JSON.stringify(cleanApplicationData, null, 2));
+
       const applicationDoc = {
-        ...applicationData,
+        ...cleanApplicationData,
         status: 'pending',
         createdAt: firestore.FieldValue.serverTimestamp(),
         updatedAt: firestore.FieldValue.serverTimestamp(),
