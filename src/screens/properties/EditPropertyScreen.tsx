@@ -33,6 +33,7 @@ const EditPropertyScreen: React.FC<EditPropertyScreenProps> = ({ navigation, rou
         type: property.type || PropertyType.PG,
         location: {
           address: property.location?.address || '',
+          landmark: property.location?.landmark || '',
           city: property.location?.city || '',
           state: property.location?.state || '',
           postalCode: property.location?.postalCode || '',
@@ -185,6 +186,7 @@ const EditPropertyScreen: React.FC<EditPropertyScreenProps> = ({ navigation, rou
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Location</Text>
             {renderLocationInput('Address', 'address', 'Enter full address')}
+            {renderLocationInput('Landmark', 'landmark', 'Enter nearby landmark (optional)')}
             {renderLocationInput('City', 'city', 'Enter city name')}
             {renderLocationInput('State', 'state', 'Enter state name')}
             {renderLocationInput('Postal Code', 'postalCode', 'Enter postal code')}

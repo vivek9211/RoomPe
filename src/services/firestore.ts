@@ -572,7 +572,18 @@ class FirestoreService {
    */
   async updatePropertyPayments(
     propertyId: string,
-    payments: { enabled?: boolean; linkedAccountId?: string; platformFeePercent?: number; notes?: string }
+    payments: { 
+      enabled?: boolean; 
+      linkedAccountId?: string; 
+      platformFeePercent?: number; 
+      notes?: string;
+      bankDetails?: {
+        beneficiaryName?: string;
+        accountNumber?: string;
+        ifscCode?: string;
+        updatedAt?: Date;
+      };
+    }
   ): Promise<void> {
     try {
       const updateData: any = {

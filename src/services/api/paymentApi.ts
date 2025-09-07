@@ -3,7 +3,8 @@
 // Replace BASE_URL and wire auth headers as per your backend.
 
 // TODO: move to a dedicated config (do not use process.env in React Native)
-const BASE_URL = 'http://localhost:4000';
+// Replace with your computer's IP address when testing on device/emulator
+const BASE_URL = 'http://192.168.1.88:4000'; // Your computer's IP address
 
 export interface CreateLinkedAccountInput {
   name: string;
@@ -26,13 +27,23 @@ export interface CreateLinkedAccountResponse {
 }
 
 export async function createLinkedAccount(input: CreateLinkedAccountInput) {
-  const res = await fetch(`${BASE_URL}/payments/route/linked-accounts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input)
-  });
-  if (!res.ok) throw new Error('Failed to create linked account');
-  return (await res.json()) as CreateLinkedAccountResponse;
+  try {
+    const res = await fetch(`${BASE_URL}/payments/route/linked-accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to create linked account: ${res.status} ${res.statusText} - ${errorData.error || 'Unknown error'}`);
+    }
+    return (await res.json()) as CreateLinkedAccountResponse;
+  } catch (error: any) {
+    if (error.message.includes('Network request failed')) {
+      throw new Error(`Cannot connect to payment server at ${BASE_URL}. Make sure the server is running and update BASE_URL with your computer's IP address.`);
+    }
+    throw error;
+  }
 }
 
 export interface UpdateSettlementsInput {
@@ -44,17 +55,30 @@ export interface UpdateSettlementsInput {
 }
 
 export async function updateLinkedAccountSettlements(input: UpdateSettlementsInput) {
-  const { accountId, productId, ...body } = input;
-  const url = productId
-    ? `${BASE_URL}/payments/route/linked-accounts/${accountId}/products/${productId}/settlements`
-    : `${BASE_URL}/payments/route/linked-accounts/${accountId}/settlements`;
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) throw new Error('Failed to update settlements');
-  return await res.json();
+  try {
+    const { accountId, productId, ...body } = input;
+    const url = productId
+      ? `${BASE_URL}/payments/route/linked-accounts/${accountId}/products/${productId}/settlements`
+      : `${BASE_URL}/payments/route/linked-accounts/${accountId}/settlements`;
+    
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to update settlements: ${res.status} ${res.statusText} - ${errorData.error || 'Unknown error'}`);
+    }
+    
+    return await res.json();
+  } catch (error: any) {
+    if (error.message.includes('Network request failed')) {
+      throw new Error(`Cannot connect to payment server at ${BASE_URL}. Make sure the server is running.`);
+    }
+    throw error;
+  }
 }
 
 export interface CreateOrderWithTransfersInput {

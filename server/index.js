@@ -12,8 +12,9 @@ const PORT = process.env.PORT || 4000;
 
 app.use('/payments', paymentsRouter);
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Payments server running on http://localhost:${PORT}`);
+  console.log(`Server accessible from network at http://192.168.1.88:${PORT}`);
 });
 
 

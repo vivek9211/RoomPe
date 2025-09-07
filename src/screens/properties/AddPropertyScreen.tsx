@@ -32,6 +32,7 @@ const AddPropertyScreen: React.FC = () => {
     ownerPhone: '',
     location: {
       address: '',
+      landmark: '',
       city: '',
       state: '',
       postalCode: '',
@@ -278,6 +279,7 @@ const AddPropertyScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>Location</Text>
             
             {renderInput('Address', 'location.address', 'Enter full address', 'default', true)}
+            {renderInput('Landmark', 'location.landmark', 'Enter nearby landmark (optional)')}
             {renderInput('City', 'location.city', 'Enter city name')}
             {renderInput('State', 'location.state', 'Enter state name')}
             {renderInput('Postal Code', 'location.postalCode', 'Enter postal code')}

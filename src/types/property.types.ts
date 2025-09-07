@@ -193,6 +193,13 @@ export interface Property extends BaseProperty {
     linkedAccountId?: string; // If different from owner's default linked account
     platformFeePercent?: number; // Override commission for this property
     notes?: string;
+    // Bank details for settlements
+    bankDetails?: {
+      beneficiaryName?: string;
+      accountNumber?: string;
+      ifscCode?: string;
+      updatedAt?: Timestamp;
+    };
   };
 }
 

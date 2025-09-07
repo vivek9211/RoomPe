@@ -5,6 +5,7 @@ import { Property } from '../../types/property.types';
 import { User } from '../../types/user.types';
 import { firestoreService } from '../../services/firestore';
 import { createLinkedAccount, updateLinkedAccountSettlements } from '../../services/api/paymentApi';
+import { formatAddressForRazorpay } from '../../utils/razorpayUtils';
 
 interface PaymentKycScreenProps {
   navigation: any;
@@ -38,7 +39,12 @@ const PaymentKycScreen: React.FC<PaymentKycScreenProps> = ({ navigation, route }
         // Get owner name from property collection
         setOwnerName(property.ownerName || '');
         setOwnerPhone(property.ownerPhone || '');
-        setBeneficiaryName(property.ownerName || '');
+        
+        // Pre-fill bank details if they exist, otherwise use owner name as default
+        const existingBankDetails = property?.payments?.bankDetails;
+        setBeneficiaryName(existingBankDetails?.beneficiaryName || property.ownerName || '');
+        setAccountNumber(existingBankDetails?.accountNumber || '');
+        setIfsc(existingBankDetails?.ifscCode || '');
 
         // Get owner email from users collection
         console.log('Fetching user profile for ownerId:', property.ownerId);
@@ -94,15 +100,53 @@ const PaymentKycScreen: React.FC<PaymentKycScreenProps> = ({ navigation, route }
           name: ownerName || 'Property Owner',
           email,
           contact: ownerPhone || '9999999999',
-          address: { city: property?.location?.city || 'NA', state: property?.location?.state || 'NA', postal_code: property?.location?.postalCode || '000000', country: 'IN' }
+          address: formatAddressForRazorpay(property?.location)
         });
         accountId = created.linkedAccountId;
         await firestoreService.updatePropertyPayments(property.id, { enabled: true, linkedAccountId: accountId });
       }
       if (accountId && beneficiaryName && accountNumber && ifsc) {
-        await updateLinkedAccountSettlements({ accountId, beneficiary_name: beneficiaryName, account_number: accountNumber, ifsc_code: ifsc });
+        try {
+          await updateLinkedAccountSettlements({ accountId, beneficiary_name: beneficiaryName, account_number: accountNumber, ifsc_code: ifsc });
+          
+          // Save bank details to Firestore payments section
+          await firestoreService.updatePropertyPayments(property.id, {
+            enabled: true,
+            linkedAccountId: accountId,
+            bankDetails: {
+              beneficiaryName: beneficiaryName,
+              accountNumber: accountNumber,
+              ifscCode: ifsc,
+              updatedAt: new Date(),
+            }
+          } as any);
+          
+          Alert.alert('Success', 'Payment details and bank information saved successfully');
+        } catch (settlementError: any) {
+          // If settlements fail, still save the bank details to Firestore for later use
+          await firestoreService.updatePropertyPayments(property.id, {
+            enabled: true,
+            linkedAccountId: accountId,
+            bankDetails: {
+              beneficiaryName: beneficiaryName,
+              accountNumber: accountNumber,
+              ifscCode: ifsc,
+              updatedAt: new Date(),
+            }
+          } as any);
+          
+          Alert.alert(
+            'Partial Success', 
+            'Linked account created and bank details saved to property. Razorpay settlements update failed - the account may need activation first. Bank details are stored and can be retried later.',
+            [
+              { text: 'OK', onPress: () => navigation.goBack() }
+            ]
+          );
+          return; // Exit early since we already showed an alert
+        }
+      } else {
+        Alert.alert('Success', 'Payment details saved');
       }
-      Alert.alert('Success', 'Payment details saved');
       navigation.goBack();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to save payment details');
