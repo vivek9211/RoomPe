@@ -184,6 +184,14 @@ export interface Property extends BaseProperty {
     totalRevenue: number;
     lastOccupiedAt?: Timestamp;
   };
+
+  // Razorpay Route mapping for owner settlements per property (optional override)
+  payments?: {
+    enabled: boolean;
+    linkedAccountId?: string; // If different from owner's default linked account
+    platformFeePercent?: number; // Override commission for this property
+    notes?: string;
+  };
 }
 
 // Property validation schema

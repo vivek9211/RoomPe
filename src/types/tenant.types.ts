@@ -117,6 +117,11 @@ export interface Tenant extends BaseTenant {
     nextPaymentDate?: Timestamp;
     outstandingAmount?: number;
     latePaymentCount?: number;
+    razorpay?: {
+      lastOrderId?: string; // order_XXXX
+      lastPaymentId?: string; // pay_XXXX
+      lastWebhookAt?: Timestamp;
+    };
   };
   
   // Optional preferences

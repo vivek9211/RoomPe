@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { colors, fonts, dimensions } from '../../constants';
+import paymentApi from '../../services/api/paymentApi';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface OwnerSettingsScreenProps {
@@ -17,6 +18,7 @@ interface OwnerSettingsScreenProps {
 
 const OwnerSettingsScreen: React.FC<OwnerSettingsScreenProps> = ({ navigation }) => {
   const { signOut, userProfile } = useAuth();
+  const [linkedStatus, setLinkedStatus] = React.useState<string>('');
 
   const handleLogout = () => {
     Alert.alert(
@@ -67,6 +69,18 @@ const OwnerSettingsScreen: React.FC<OwnerSettingsScreenProps> = ({ navigation })
     navigation.navigate('AboutApp');
   };
 
+  const handleCreateLinkedAccount = async () => {
+    if (!userProfile?.uid) return;
+    const res = await paymentApi.createLinkedAccount({ ownerId: userProfile.uid });
+    setLinkedStatus(`${res.status} (${res.linkedAccountId})`);
+  };
+
+  const handleRefreshLinkedStatus = async () => {
+    if (!userProfile?.uid) return;
+    const res = await paymentApi.getLinkedAccountStatus(userProfile.uid);
+    setLinkedStatus(`${res.status || 'unknown'}${res.linkedAccountId ? ` (${res.linkedAccountId})` : ''}`);
+  };
+
   const renderSettingItem = (
     icon: string,
     title: string,
@@ -114,6 +128,18 @@ const OwnerSettingsScreen: React.FC<OwnerSettingsScreenProps> = ({ navigation })
           <Text style={styles.sectionTitle}>Support</Text>
           {renderSettingItem('❓', 'Help & Support', 'Get help and contact support', handleNavigateToHelp)}
           {renderSettingItem('ℹ️', 'About', 'App version and information', handleNavigateToAbout)}
+        </View>
+
+        {/* Payments Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Payments</Text>
+          {renderSettingItem('🏦', 'Create Razorpay Linked Account', 'Start receiving settlements directly', handleCreateLinkedAccount)}
+          {renderSettingItem('🔄', 'Refresh Linked Account Status', 'Check KYC/product activation status', handleRefreshLinkedStatus)}
+          {linkedStatus ? (
+            <View style={{ paddingHorizontal: dimensions.spacing.xl, paddingTop: dimensions.spacing.sm }}>
+              <Text style={{ color: colors.textSecondary }}>Status: {linkedStatus}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Logout Section */}

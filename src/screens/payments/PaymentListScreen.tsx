@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { colors, fonts, dimensions } from '../../constants';
+import usePayments from '../../hooks/usePayments';
 
 const PaymentListScreen: React.FC = () => {
+  const { loading } = usePayments();
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
+
+  const handleRefresh = () => {
+    setLastRefreshedAt(Date.now());
+  };
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -18,6 +25,14 @@ const PaymentListScreen: React.FC = () => {
         <TouchableOpacity style={styles.addButton}>
           <Text style={styles.addButtonText}>+ Add Payment</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.addButton, { marginTop: dimensions.spacing.md }]} onPress={handleRefresh}>
+          <Text style={styles.addButtonText}>{loading ? 'Refreshing...' : 'Refresh Status'}</Text>
+        </TouchableOpacity>
+
+        {lastRefreshedAt ? (
+          <Text style={styles.helper}>Last refreshed: {new Date(lastRefreshedAt).toLocaleString()}</Text>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -57,6 +72,7 @@ const styles = StyleSheet.create({
     fontSize: fonts.md,
     fontWeight: '500',
   },
+  helper: { color: colors.textSecondary, marginTop: dimensions.spacing.sm },
 });
 
 export default PaymentListScreen;
