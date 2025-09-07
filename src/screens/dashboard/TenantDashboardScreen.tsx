@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { firestoreService } from '../../services/firestore';
@@ -29,6 +30,7 @@ interface AssignedPropertyData {
 
 const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigation }) => {
   const { userProfile } = useAuth();
+  const insets = useSafeAreaInsets();
   const [assignedProperty, setAssignedProperty] = useState<AssignedPropertyData | null>(null);
   const [loadingProperty, setLoadingProperty] = useState(true);
 
@@ -200,11 +202,11 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
       <StatusBar
         barStyle="light-content"
         backgroundColor={colors.primary}
-        translucent={true}
+        translucent={false}
       />
       
       {/* Top Bar */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: insets.top + dimensions.spacing.md }]}>
         <View style={styles.userInfo}>
           <View style={styles.userAvatar}>
             <Text style={styles.avatarText}>👤</Text>
@@ -418,9 +420,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: dimensions.spacing.lg,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : dimensions.spacing.md,
+    paddingTop: dimensions.spacing.md,
     paddingBottom: dimensions.spacing.md,
-    minHeight: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 70 : 70,
+    minHeight: 70,
   },
   userInfo: {
     flexDirection: 'row',

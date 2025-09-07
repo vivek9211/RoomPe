@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProperty } from '../../contexts/PropertyContext';
@@ -27,6 +28,7 @@ interface OwnerDashboardScreenProps {
 const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation, route }) => {
   const { userProfile, signOut } = useAuth();
   const { selectedProperty, setSelectedProperty } = useProperty();
+  const insets = useSafeAreaInsets();
   const [properties, setProperties] = useState<Property[]>([]);
   
   // Animation values for scroll effects
@@ -174,14 +176,14 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
 
      return (
      <SafeAreaView style={styles.container}>
-       <StatusBar
-         barStyle="light-content"
-         backgroundColor={colors.primary}
-         translucent={true}
-       />
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={colors.primary}
+        translucent={false}
+      />
        
-       {/* Top Bar */}
-       <View style={styles.topBar}>
+      {/* Top Bar */}
+      <View style={[styles.topBar, { paddingTop: insets.top + dimensions.spacing.md }]}>
          <View style={styles.propertySelector}>
            <TouchableOpacity style={styles.propertyButton} onPress={handlePropertySwitch}>
              <Text style={styles.propertyName}>
@@ -480,9 +482,9 @@ const styles = StyleSheet.create({
      alignItems: 'center',
      justifyContent: 'space-between',
      paddingHorizontal: dimensions.spacing.lg,
-     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : dimensions.spacing.md,
+     paddingTop: dimensions.spacing.md,
      paddingBottom: dimensions.spacing.md,
-     minHeight: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 70 : 70,
+     minHeight: 70,
    },
 
   propertySelector: {
