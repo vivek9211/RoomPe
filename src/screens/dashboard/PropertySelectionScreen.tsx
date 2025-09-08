@@ -441,6 +441,28 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           📍 {property.location?.address || 'Address not available'}
         </Text>
       </View>
+
+      {/* KYC banner (shows if not activated OR not yet set up) */}
+      {(() => {
+        const status = kycStatuses[property.id];
+        const linked = (property as any)?.payments?.linkedAccountId;
+        const showBanner = !linked || (status && status !== 'activated');
+        if (!showBanner) return null;
+        return (
+          <View style={styles.kycBanner}>
+            <Text style={styles.kycBannerText}>
+              {!linked
+                ? 'KYC not set up'
+                : status === 'needs_clarification'
+                  ? 'KYC needs clarification'
+                  : 'KYC pending review'}
+            </Text>
+            <TouchableOpacity style={styles.kycBannerButton} onPress={() => handlePaymentKyc(property)}>
+              <Text style={styles.kycBannerButtonText}>{!linked ? 'Setup KYC' : 'Manage KYC'}</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      })()}
       
       <View style={styles.propertyMetrics}>
         <View style={styles.metric}>
@@ -468,8 +490,8 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       
              {/* Property Actions */}
       <View style={styles.propertyActions}>
-        {/* Row 1: View Details + Edit */}
-        <View style={styles.actionRow}>
+        {/* Row 1: View Details + Edit + Floors */}
+        <View style={styles.actionRow3}>
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => handleViewDetails(property)}
@@ -482,38 +504,21 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           >
             <Text style={styles.actionButtonText}>Edit</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Row 2: Floors + Room Management */}
-        <View style={styles.actionRow}>
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => handleRoomMapping(property)}
           >
             <Text style={styles.actionButtonText}>Floors</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Row 2: Room Management + Delete */}
+        <View style={styles.actionRow}>
           <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => handleRoomManagement(property)}
           >
             <Text style={styles.actionButtonText}>Room Management</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Row 3: Payment KYC + Delete */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handlePaymentKyc(property)}
-          >
-            <Text style={[
-              styles.actionButtonText,
-              kycStatuses[property.id] === 'activated' ? styles.kycCompletedText :
-              (kycStatuses[property.id] && kycStatuses[property.id] !== 'activated') ? styles.kycPendingText : null
-            ]}>
-              {kycStatuses[property.id] === 'activated' ? 'KYC Completed' :
-               (kycStatuses[property.id] && kycStatuses[property.id] !== 'activated') ? 'Pending KYC' : 'Payment KYC'}
-            </Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.actionButton, styles.deleteButton]}
@@ -811,6 +816,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: dimensions.spacing.sm,
   },
+  actionRow3: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: dimensions.spacing.sm,
+    gap: dimensions.spacing.xs,
+  },
   actionButton: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -845,6 +856,42 @@ const styles = StyleSheet.create({
   kycCompletedText: {
     color: '#065F46',
     fontWeight: '700',
+  },
+  kycPendingButton: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  kycCompletedButton: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  kycBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: dimensions.borderRadius.md,
+    marginBottom: dimensions.spacing.md,
+  },
+  kycBannerText: {
+    color: '#92400E',
+    fontSize: fonts.sm,
+    fontWeight: '600',
+  },
+  kycBannerButton: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: 6,
+    borderRadius: dimensions.borderRadius.sm,
+  },
+  kycBannerButtonText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: fonts.xs,
   },
 });
 
