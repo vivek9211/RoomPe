@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useProperty } from '../../contexts/PropertyContext';
 import { Property } from '../../types/property.types';
 import { firestoreService } from '../../services/firestore';
+import { getRouteAccountStatus } from '../../services/api/paymentApi';
 import { tenantApiService } from '../../services/api/tenantApi';
 
 interface PropertySelectionScreenProps {
@@ -32,6 +33,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
   const [roomMappings, setRoomMappings] = useState<{[key: string]: any}>({});
   const [tenantCounts, setTenantCounts] = useState<{[propertyId: string]: number}>({});
   const [occupiedRoomIds, setOccupiedRoomIds] = useState<{[propertyId: string]: string[]}>({});
+  const [kycStatuses, setKycStatuses] = useState<{[propertyId: string]: string}>({});
 
   // Load properties and set up real-time listener
   useEffect(() => {
@@ -59,6 +61,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
             updatedAt: firebaseProperty.updatedAt,
             pricing: firebaseProperty.pricing,
             contactInfo: firebaseProperty.contactInfo,
+            payments: firebaseProperty.payments,
           }));
           
           setProperties(properties);
@@ -76,6 +79,27 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       return () => unsubscribe();
     }
   }, [userProfile?.uid]);
+
+  // Fetch KYC statuses when properties change
+  useEffect(() => {
+    const fetchStatuses = async () => {
+      try {
+        const entries: {[id: string]: string} = {};
+        for (const p of properties) {
+          const accId = (p as any)?.payments?.linkedAccountId;
+          if (!accId) continue;
+          try {
+            const data = await getRouteAccountStatus(accId);
+            entries[p.id] = data?.status || 'unknown';
+          } catch (_) {
+            entries[p.id] = 'unknown';
+          }
+        }
+        setKycStatuses(entries);
+      } catch (_) {}
+    };
+    if (properties.length > 0) fetchStatuses();
+  }, [properties]);
 
   const loadProperties = async () => {
     if (!userProfile?.uid) {
@@ -106,6 +130,7 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
           updatedAt: firebaseProperty.updatedAt,
           pricing: firebaseProperty.pricing,
           contactInfo: firebaseProperty.contactInfo,
+          payments: firebaseProperty.payments,
         };
       });
       
@@ -481,7 +506,14 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
             style={styles.actionButton}
             onPress={() => handlePaymentKyc(property)}
           >
-            <Text style={styles.actionButtonText}>Payment KYC</Text>
+            <Text style={[
+              styles.actionButtonText,
+              kycStatuses[property.id] === 'activated' ? styles.kycCompletedText :
+              (kycStatuses[property.id] && kycStatuses[property.id] !== 'activated') ? styles.kycPendingText : null
+            ]}>
+              {kycStatuses[property.id] === 'activated' ? 'KYC Completed' :
+               (kycStatuses[property.id] && kycStatuses[property.id] !== 'activated') ? 'Pending KYC' : 'Payment KYC'}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.actionButton, styles.deleteButton]}
@@ -805,6 +837,14 @@ const styles = StyleSheet.create({
   },
   deleteButtonText: {
     color: '#DC2626',
+  },
+  kycPendingText: {
+    color: '#B45309',
+    fontWeight: '700',
+  },
+  kycCompletedText: {
+    color: '#065F46',
+    fontWeight: '700',
   },
 });
 

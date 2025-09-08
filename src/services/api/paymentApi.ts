@@ -122,8 +122,8 @@ export async function verifyPaymentSignature(input: VerifyPaymentInput) {
   return (await res.json()) as { success: boolean };
 }
 
-export async function getLinkedAccountStatus(ownerId: string) {
-  const res = await fetch(`${BASE_URL}/payments/route/linked-accounts/${ownerId}`);
+export async function getRouteAccountStatus(accountId: string) {
+  const res = await fetch(`${BASE_URL}/payments/route/linked-accounts/${accountId}?ensure_product=true&_=${Date.now()}`);
   if (!res.ok) throw new Error('Failed to fetch linked account status');
   return (await res.json()) as {
     linkedAccountId?: string;
@@ -137,5 +137,5 @@ export default {
   updateLinkedAccountSettlements,
   createOrderWithTransfers,
   verifyPaymentSignature,
-  getLinkedAccountStatus
+  getRouteAccountStatus
 };

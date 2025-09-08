@@ -85,12 +85,41 @@ export async function createLinkedAccount(req, res) {
 export async function getLinkedAccountStatus(req, res) {
   try {
     const { accountId } = req.params;
+    const { ensure_product } = req.query || {};
     if (!accountId) return res.status(400).json({ error: 'Missing accountId' });
+    const auth = Buffer.from(`${RAZORPAY_KEY}:${RAZORPAY_SECRET}`).toString('base64');
     const account = await razorpay.accounts.fetch(accountId);
     let status = account?.status || account?.verification?.status || 'unknown';
-    const routeStatus = await fetchRouteProductStatus(accountId);
-    if (routeStatus) status = routeStatus; // 'under_review' | 'needs_clarification' | 'activated'
-    return res.json({ linkedAccountId: accountId, status });
+    let routeProduct = null;
+    // Try to fetch product details
+    try {
+      const resp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}/products`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+      const data = await resp.json();
+      const items = Array.isArray(data?.items) ? data.items : (data?.id ? [data] : []);
+      routeProduct = items.find(p => (p?.product_name || '').toLowerCase() === 'route');
+    } catch (_) {}
+    // Optionally ensure product exists and T&C accepted
+    if (!routeProduct && (ensure_product === 'true' || ensure_product === '1')) {
+      try {
+        const resp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}/products`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_name: 'route', tnc_accepted: true })
+        });
+        const data = await resp.json();
+        if (resp.ok) routeProduct = data;
+      } catch (_) {}
+    }
+    // Prefer activation_status from product
+    if (routeProduct?.activation_status) {
+      status = routeProduct.activation_status;
+    } else {
+      const routeStatus = await fetchRouteProductStatus(accountId);
+      if (routeStatus) status = routeStatus;
+    }
+    return res.json({ linkedAccountId: accountId, status, route_product: routeProduct || undefined });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'Failed to fetch linked account' });
