@@ -1,3 +1,6 @@
+java --version
+java 23.0.1 2024-10-15
+
 🔧 1. Prerequisites
 
 Make sure these are installed first:

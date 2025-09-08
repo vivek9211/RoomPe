@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { razorpay, RAZORPAY_SECRET, RAZORPAY_KEY } from '../razorpayClient.js';
-
+ 
 async function fetchRouteProductStatus(accountId) {
   try {
     const auth = Buffer.from(`${RAZORPAY_KEY}:${RAZORPAY_SECRET}`).toString('base64');
@@ -16,7 +16,38 @@ async function fetchRouteProductStatus(accountId) {
     return null;
   }
 }
-
+ 
+// Get the Route product for an account, creating it if missing. Returns { id, activation_status }
+async function getOrCreateRouteProduct(accountId) {
+  const auth = Buffer.from(`${RAZORPAY_KEY}:${RAZORPAY_SECRET}`).toString('base64');
+  // Try fetch existing products first
+  try {
+    const productsResp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}/products`, {
+      headers: { 'Authorization': `Basic ${auth}` }
+    });
+    if (productsResp.ok) {
+      const productsData = await productsResp.json();
+      const existing = (productsData?.items || []).find(p => (p?.product_name || '').toLowerCase() === 'route');
+      if (existing) return { id: existing.id, activation_status: existing.activation_status };
+    }
+  } catch (_) {}
+ 
+  // Create Route product
+  const createResp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}/products`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ product_name: 'route', tnc_accepted: true })
+  });
+  const createData = await createResp.json();
+  if (!createResp.ok) {
+    throw new Error(createData?.error?.description || 'Failed to create Route product');
+  }
+  return { id: createData.id, activation_status: createData.activation_status };
+}
+ 
 export async function createLinkedAccount(req, res) {
   try {
     const { name, email, contact, business_type = 'individual', address } = req.body || {};
@@ -50,7 +81,7 @@ export async function createLinkedAccount(req, res) {
     return res.status(400).json({ error: description, raw: e?.error || undefined });
   }
 }
-
+ 
 export async function getLinkedAccountStatus(req, res) {
   try {
     const { accountId } = req.params;
@@ -65,7 +96,7 @@ export async function getLinkedAccountStatus(req, res) {
     return res.status(500).json({ error: 'Failed to fetch linked account' });
   }
 }
-
+ 
 export async function createOrder(req, res) {
   try {
     const { tenantId, propertyId, amount, currency = 'INR', landlordLinkedAccountId, platformFeePercent = 5 } = req.body || {};
@@ -85,7 +116,7 @@ export async function createOrder(req, res) {
     return res.status(500).json({ error: 'Failed to create order' });
   }
 }
-
+ 
 export async function verifyPayment(req, res) {
   try {
     const { orderId, paymentId, signature } = req.body || {};
@@ -103,7 +134,7 @@ export async function verifyPayment(req, res) {
     return res.status(500).json({ success: false, error: 'Verification/transfer failed' });
   }
 }
-
+ 
 export function webhooks(req, res) {
   try {
     const rawBody = req.body; // Buffer (express.raw)
@@ -131,7 +162,7 @@ export function webhooks(req, res) {
     return res.status(400).send('bad');
   }
 }
-
+ 
 // Update settlements bank details for a linked account
 export async function updateLinkedAccountSettlements(req, res) {
   try {
@@ -140,59 +171,25 @@ export async function updateLinkedAccountSettlements(req, res) {
     if (!accountId || !beneficiary_name || !account_number || !ifsc_code) {
       return res.status(400).json({ error: 'accountId, beneficiary_name, account_number, ifsc_code are required' });
     }
-    
+   
     const auth = Buffer.from(`${RAZORPAY_KEY}:${RAZORPAY_SECRET}`).toString('base64');
-    
-    // First, check if the account is activated and ready for settlements
+   
+    // Get or create Route product so we can PATCH settlements at product-level
+    let routeProductId = productId;
     try {
-      const accountResp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}`, {
-        headers: { 'Authorization': `Basic ${auth}` }
-      });
-      const accountData = await accountResp.json();
-      
-      if (!accountResp.ok) {
-        return res.status(accountResp.status).json({ 
-          error: `Account not found or accessible: ${accountData?.error?.description || 'Unknown error'}`,
-          raw: accountData
-        });
-      }
-      
-      // Check if account is activated
-      if (accountData.status !== 'activated') {
-        return res.status(400).json({ 
-          error: `Account is not activated yet. Current status: ${accountData.status}. Please wait for account activation before adding bank details.`,
-          accountStatus: accountData.status
-        });
+      if (!routeProductId) {
+        const routeProduct = await getOrCreateRouteProduct(accountId);
+        routeProductId = routeProduct.id;
       }
     } catch (e) {
-      console.log('Could not fetch account details, proceeding with settlements update');
+      // If product create fails, continue with other methods as fallback
+      console.log('Route product get/create failed:', e?.message || e);
     }
-    
-    // Try to get the Route product for settlements
-    let routeProductId = productId;
-    if (!routeProductId) {
-      try {
-        const productsResp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}/products`, {
-          headers: { 'Authorization': `Basic ${auth}` }
-        });
-        const productsData = await productsResp.json();
-        if (productsResp.ok && productsData.items) {
-          // Find the Route product
-          const routeProduct = productsData.items.find(p => p.product_name === 'route' || p.product_name === 'Route');
-          if (routeProduct) {
-            routeProductId = routeProduct.id;
-            console.log('Found Route product:', routeProductId);
-          }
-        }
-      } catch (e) {
-        console.log('Could not fetch products, proceeding without productId');
-      }
-    }
-    
+   
     // Try different approaches to update settlements
     let success = false;
     let lastError = null;
-    
+   
     // Method 1: Try updating settlements via account profile (most common)
     try {
       const profileResp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}/profile`, {
@@ -205,7 +202,7 @@ export async function updateLinkedAccountSettlements(req, res) {
           settlements: { beneficiary_name, account_number, ifsc_code }
         })
       });
-      
+     
       const profileData = await profileResp.json();
       if (profileResp.ok) {
         return res.json({ success: true, accountId, method: 'profile', data: profileData });
@@ -216,7 +213,7 @@ export async function updateLinkedAccountSettlements(req, res) {
     } catch (e) {
       console.log('Profile method error:', e.message);
     }
-    
+   
     // Method 2: Try updating via account directly
     try {
       const accountResp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}`, {
@@ -229,7 +226,7 @@ export async function updateLinkedAccountSettlements(req, res) {
           settlements: { beneficiary_name, account_number, ifsc_code }
         })
       });
-      
+     
       const accountData = await accountResp.json();
       if (accountResp.ok) {
         return res.json({ success: true, accountId, method: 'account', data: accountData });
@@ -240,8 +237,8 @@ export async function updateLinkedAccountSettlements(req, res) {
     } catch (e) {
       console.log('Account method error:', e.message);
     }
-    
-    // Method 3: Try updating via product if we have productId
+   
+    // Method 3: Try updating via product if we have productId (preferred)
     if (routeProductId) {
       try {
         const productResp = await fetch(`https://api.razorpay.com/v2/accounts/${accountId}/products/${routeProductId}`, {
@@ -254,7 +251,7 @@ export async function updateLinkedAccountSettlements(req, res) {
             settlements: { beneficiary_name, account_number, ifsc_code }
           })
         });
-        
+       
         const productData = await productResp.json();
         if (productResp.ok) {
           return res.json({ success: true, accountId, productId: routeProductId, method: 'product', data: productData });
@@ -266,20 +263,20 @@ export async function updateLinkedAccountSettlements(req, res) {
         console.log('Product method error:', e.message);
       }
     }
-    
+   
     // If all methods failed, return the last error
-    return res.status(400).json({ 
+    return res.status(400).json({
       error: 'All settlement update methods failed. Account may not be ready for settlements yet.',
       lastError: lastError,
       suggestion: 'Please ensure the linked account is activated and try again later.'
     });
-    
+   
   } catch (e) {
     console.error('Update settlements error:', e);
     return res.status(500).json({ error: 'Failed to update settlements' });
   }
 }
-
+ 
 // Create a minimal stakeholder for the linked account
 export async function createLinkedAccountStakeholder(req, res) {
   try {
@@ -311,5 +308,3 @@ export async function createLinkedAccountStakeholder(req, res) {
     return res.status(500).json({ error: 'Failed to create stakeholder' });
   }
 }
-
-
