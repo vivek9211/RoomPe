@@ -8,7 +8,7 @@
 // For production: use your deployed server URL (e.g., https://your-app.herokuapp.com)
 const BASE_URL = __DEV__ 
   ? 'http://192.168.1.88:4000' // Development - your computer's IP address
-  : 'https://room-c33zy0ulk-vivek-kumars-projects-888c40b7.vercel.app/'; // Production - replace with your actual deployed URL
+  : 'https://room-c21wsflx6-vivek-kumars-projects-888c40b7.vercel.app'; // Production - your Vercel deployment
 
 export interface CreateLinkedAccountInput {
   name: string;
