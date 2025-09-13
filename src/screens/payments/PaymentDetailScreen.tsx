@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { colors, fonts, dimensions } from '../../constants';
-import usePayments from '../../hooks/usePayments';
+import { usePayments } from '../../hooks/usePayments';
 
 const PaymentDetailScreen: React.FC = () => {
   const { createOrder, verifyPayment, loading, error } = usePayments();

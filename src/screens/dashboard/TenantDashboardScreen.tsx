@@ -18,6 +18,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { firestoreService } from '../../services/firestore';
 import { TenantApplication, TenantApplicationStatus } from '../../types/tenant.types';
 import { Property } from '../../types/property.types';
+import { usePayments } from '../../hooks/usePayments';
+// Removed cleanup functions - no longer needed
 
 interface TenantDashboardScreenProps {
   navigation: any;
@@ -33,6 +35,16 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
   const insets = useSafeAreaInsets();
   const [assignedProperty, setAssignedProperty] = useState<AssignedPropertyData | null>(null);
   const [loadingProperty, setLoadingProperty] = useState(true);
+  
+  // Payment hooks
+  const {
+    currentMonthRent,
+    pendingPayments,
+    paymentStats,
+    totalOutstanding,
+    currentMonthStatus,
+    loading: paymentsLoading
+  } = usePayments();
 
   // Fetch assigned property on component mount and set up real-time listener
   useEffect(() => {
@@ -115,7 +127,7 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
   };
 
   const handlePayDues = () => {
-    navigation.navigate('Payments');
+    navigation.navigate('TenantPayments');
   };
 
   const handleExpressCheckIn = () => {
@@ -143,6 +155,8 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
   const handleHelp = () => {
     Alert.alert('Help', 'Contact support at support@roompe.com');
   };
+
+  // Removed cleanup function - no longer needed
 
   const handleViewPropertyDetails = () => {
     console.log('handleViewPropertyDetails called');
@@ -308,43 +322,71 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
           <Text style={styles.sectionTitle}>My Accounts</Text>
           
           <View style={styles.accountCards}>
-            <View style={styles.accountCard}>
-              <View style={styles.cardContent}>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>Pay dues to get credits</Text>
-                  <View style={styles.cardIcon}>
-                    <Text style={styles.iconText}>💰</Text>
+            {/* Current Month Rent */}
+            {currentMonthRent && (
+              <View style={styles.accountCard}>
+                <View style={styles.cardContent}>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardTitle}>
+                      {currentMonthRent.month} Rent
+                    </Text>
+                    <Text style={styles.duesAmount}>
+                      ₹{currentMonthRent.amount + (currentMonthRent.lateFee || 0)}
+                    </Text>
+                    <View style={styles.cardIcon}>
+                      <Text style={styles.iconText}>🏠</Text>
+                    </View>
                   </View>
+                  {currentMonthStatus === 'pending' || currentMonthStatus === 'overdue' ? (
+                    <TouchableOpacity style={styles.payButton} onPress={handlePayDues}>
+                      <Text style={styles.payButtonText}>Pay Now</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.paidBadge}>
+                      <Text style={styles.paidText}>Paid</Text>
+                    </View>
+                  )}
                 </View>
-                <TouchableOpacity style={styles.payButton} onPress={handlePayDues}>
-                  <Text style={styles.payButtonText}>Pay Now</Text>
-                </TouchableOpacity>
               </View>
-            </View>
+            )}
             
-            <View style={styles.accountCard}>
-              <View style={styles.cardContent}>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>Total Dues</Text>
-                  <Text style={styles.duesAmount}>₹10000</Text>
-                  <View style={styles.cardIcon}>
-                    <Text style={styles.iconText}>📅</Text>
+            {/* Total Outstanding */}
+            {totalOutstanding > 0 && (
+              <View style={styles.accountCard}>
+                <View style={styles.cardContent}>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardTitle}>Total Outstanding</Text>
+                    <Text style={styles.duesAmount}>₹{totalOutstanding}</Text>
+                    <View style={styles.cardIcon}>
+                      <Text style={styles.iconText}>📅</Text>
+                    </View>
                   </View>
+                  <TouchableOpacity style={styles.payButton} onPress={handlePayDues}>
+                    <Text style={styles.payButtonText}>Pay Now</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.payButton} onPress={handlePayDues}>
-                  <Text style={styles.payButtonText}>Pay Now</Text>
-                </TouchableOpacity>
               </View>
-            </View>
+            )}
             
-            <View style={styles.accountCard}>
-              <View style={styles.cardContent}>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>Rent</Text>
-                  <Text style={styles.rentAmount}>₹100</Text>
+            {/* Payment Summary */}
+            {paymentStats && (
+              <View style={styles.accountCard}>
+                <View style={styles.cardContent}>
+                  <View style={styles.cardInfo}>
+                    <Text style={styles.cardTitle}>Payment Summary</Text>
+                    <Text style={styles.rentAmount}>
+                      {paymentStats.totalPayments} payments
+                    </Text>
+                    <Text style={styles.rentAmount}>
+                      ₹{paymentStats.paidAmount} paid
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={styles.viewButton} onPress={handlePayDues}>
+                    <Text style={styles.viewButtonText}>View All</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            )}
           </View>
         </View>
 
@@ -405,6 +447,8 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
         <Text style={styles.helpIcon}>💬</Text>
         <Text style={styles.helpText}>Help</Text>
       </TouchableOpacity>
+
+      {/* Removed cleanup button - no longer needed */}
     </SafeAreaView>
   );
 };
@@ -666,6 +710,28 @@ const styles = StyleSheet.create({
     fontSize: fonts.md,
     fontWeight: '500',
   },
+  paidBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.md,
+  },
+  paidText: {
+    color: colors.white,
+    fontSize: fonts.md,
+    fontWeight: '500',
+  },
+  viewButton: {
+    backgroundColor: colors.lightGray,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.md,
+  },
+  viewButtonText: {
+    color: colors.textPrimary,
+    fontSize: fonts.md,
+    fontWeight: '500',
+  },
   featuresSection: {
     marginBottom: dimensions.spacing.xl,
   },
@@ -786,6 +852,7 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '500',
   },
+  // Removed cleanup button styles - no longer needed
 });
 
 export default TenantDashboardScreen; 

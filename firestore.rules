@@ -89,14 +89,32 @@ service cloud.firestore {
 
     // Payments collection rules
     match /payments/{paymentId} {
-      // Allow users to manage payments for properties they own
-      allow read, write: if request.auth != null && 
-        (resource == null || userOwnsProperty(resource.data.propertyId));
-      
       // Allow tenants to read their own payments
       allow read: if request.auth != null && 
-        (resource.data.tenantId == request.auth.uid ||
-         userOwnsProperty(resource.data.propertyId));
+        resource.data.tenantId == request.auth.uid;
+      
+      // Allow property owners to read payments for their properties
+      allow read: if request.auth != null && 
+        userOwnsProperty(resource.data.propertyId);
+      
+      // Allow tenants to create payments (for manual payments)
+      allow create: if request.auth != null && 
+        request.resource.data.tenantId == request.auth.uid;
+      
+      // Allow property owners to create payments for their properties
+      allow create: if request.auth != null && 
+        userOwnsProperty(request.resource.data.propertyId);
+      
+      // Allow tenants to update their own payments (for payment status updates)
+      allow update: if request.auth != null && 
+        resource.data.tenantId == request.auth.uid;
+      
+      // Allow property owners to update payments for their properties
+      allow update: if request.auth != null && 
+        userOwnsProperty(resource.data.propertyId);
+      
+      // Allow listing payments for authenticated users
+      allow list: if request.auth != null;
     }
 
     // Maintenance requests collection rules

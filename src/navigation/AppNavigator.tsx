@@ -53,6 +53,7 @@ import TenantApplicationsScreen from '../screens/tenants/TenantApplicationsScree
 import PaymentListScreen from '../screens/payments/PaymentListScreen';
 import PaymentDetailScreen from '../screens/payments/PaymentDetailScreen';
 import AddPaymentScreen from '../screens/payments/AddPaymentScreen';
+import TenantPaymentScreen from '../screens/payments/TenantPaymentScreen';
 
 // Maintenance Screens
 import MaintenanceListScreen from '../screens/maintenance/MaintenanceListScreen';
@@ -183,7 +184,7 @@ const TenantTabNavigator = () => {
       />
       <Tab.Screen
         name="Payments"
-        component={PaymentListScreen}
+        component={TenantPaymentScreen}
         options={{
           tabBarLabel: 'Payments',
           tabBarIcon: ({ color, size }) => (
@@ -279,6 +280,7 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="TenantTabs" component={TenantTabNavigator} />
             <Stack.Screen name="AssignedPropertyDetail" component={AssignedPropertyDetailScreen} />
+            <Stack.Screen name="TenantPayments" component={TenantPaymentScreen} />
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
