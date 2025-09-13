@@ -297,6 +297,28 @@ export const usePayments = () => {
 
   // Removed generateMonthlyRentPayments function - no longer needed
 
+  // Refresh all payment data manually
+  const refreshPayments = useCallback(async () => {
+    if (!userProfile?.uid) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      await Promise.all([
+        loadPayments(),
+        loadCurrentMonthRent(),
+        loadPendingPayments(),
+        loadPaymentStats()
+      ]);
+    } catch (err: any) {
+      console.error('Error refreshing payments:', err);
+      setError(err.message || 'Failed to refresh payments');
+    } finally {
+      setLoading(false);
+    }
+  }, [userProfile?.uid, loadPayments, loadCurrentMonthRent, loadPendingPayments, loadPaymentStats]);
+
   // Load all payment data on mount
   useEffect(() => {
     if (userProfile?.uid) {
@@ -359,6 +381,7 @@ export const usePayments = () => {
     loadCurrentMonthRent,
     loadPendingPayments,
     loadPaymentStats,
+    refreshPayments,
     processOnlinePayment,
     verifyPayment,
     syncPaymentStatus,

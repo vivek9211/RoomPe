@@ -10,8 +10,9 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
@@ -35,6 +36,7 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
   const insets = useSafeAreaInsets();
   const [assignedProperty, setAssignedProperty] = useState<AssignedPropertyData | null>(null);
   const [loadingProperty, setLoadingProperty] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   
   // Payment hooks
   const {
@@ -43,7 +45,8 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     paymentStats,
     totalOutstanding,
     currentMonthStatus,
-    loading: paymentsLoading
+    loading: paymentsLoading,
+    refreshPayments
   } = usePayments();
 
   // Fetch assigned property on component mount and set up real-time listener
@@ -86,6 +89,21 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
       console.log('No user profile found');
     }
   }, [userProfile?.uid]);
+
+  // Auto-refresh payment data when screen comes into focus (e.g., returning from payment page)
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('TenantDashboard screen focused - refreshing payment data');
+      if (userProfile?.uid) {
+        // Small delay to prevent immediate refresh on first load
+        const timer = setTimeout(() => {
+          refreshPayments();
+        }, 100);
+        
+        return () => clearTimeout(timer);
+      }
+    }, [userProfile?.uid, refreshPayments])
+  );
 
   const loadAssignedProperty = async () => {
     if (!userProfile?.uid) return;
@@ -150,7 +168,16 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     Alert.alert('Notifications', 'View your notifications');
   };
 
-
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshPayments();
+    } catch (error) {
+      console.error('Error refreshing payments:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleHelp = () => {
     Alert.alert('Help', 'Contact support at support@roompe.com');
@@ -238,7 +265,20 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
          </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+            title="Pull to refresh payments"
+            titleColor={colors.textSecondary}
+          />
+        }
+      >
 
         {/* Assigned Property Section */}
         {loadingProperty ? (
@@ -321,7 +361,13 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
         <View style={styles.accountsSection}>
           <Text style={styles.sectionTitle}>My Accounts</Text>
           
-          <View style={styles.accountCards}>
+          {paymentsLoading && refreshing ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.loadingText}>Refreshing payments...</Text>
+            </View>
+          ) : (
+            <View style={styles.accountCards}>
             {/* Current Month Rent */}
             {currentMonthRent && (
               <View style={styles.accountCard}>
@@ -388,6 +434,7 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
               </View>
             )}
           </View>
+          )}
         </View>
 
         {/* New Features Section */}
