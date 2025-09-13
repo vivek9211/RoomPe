@@ -135,6 +135,8 @@ export interface UpdatePropertyData {
 // Complete property model with all fields
 export interface Property extends BaseProperty {
   // Optional property details
+  ownerName?: string; // stored at root in existing docs
+  ownerPhone?: string; // stored at root in existing docs
   description?: string;
   amenities?: PropertyAmenities;
   rules?: PropertyRules;
@@ -183,6 +185,21 @@ export interface Property extends BaseProperty {
     averageOccupancyRate: number;
     totalRevenue: number;
     lastOccupiedAt?: Timestamp;
+  };
+
+  // Razorpay Route mapping for owner settlements per property (optional override)
+  payments?: {
+    enabled: boolean;
+    linkedAccountId?: string; // If different from owner's default linked account
+    platformFeePercent?: number; // Override commission for this property
+    notes?: string;
+    // Bank details for settlements
+    bankDetails?: {
+      beneficiaryName?: string;
+      accountNumber?: string;
+      ifscCode?: string;
+      updatedAt?: Timestamp;
+    };
   };
 }
 

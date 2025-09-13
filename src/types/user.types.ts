@@ -51,6 +51,7 @@ export interface CreateUserData {
 
 // Optional fields for user updates
 export interface UpdateUserData {
+  email?: string;
   name?: string;
   phone?: string;
   profilePhoto?: string;
@@ -91,6 +92,32 @@ export interface User extends BaseUser {
     registrationSource?: string; // 'app', 'web', 'admin'
     referralCode?: string;
     lastActivityAt?: Timestamp;
+  };
+
+  // Razorpay Route linked account details (for owners/vendors)
+  razorpay?: {
+    linkedAccountId?: string; // e.g., acc_XXXX
+    routeProductStatus?: 'under_review' | 'needs_clarification' | 'activated' | 'disabled';
+    needsClarificationFields?: string[]; // field references when status = needs_clarification
+    kyc?: {
+      status?: 'pending' | 'in_progress' | 'verified' | 'rejected';
+      updatedAt?: Timestamp;
+      reason?: string; // if rejected/needs clarification
+    };
+    settlements?: {
+      enabled: boolean;
+      beneficiaryName?: string;
+      accountNumberMasked?: string;
+      ifsc?: string;
+    };
+    taxInfo?: {
+      gstin?: string;
+      pan?: string;
+    };
+    payout?: {
+      defaultCommissionPercent?: number; // platform fee percentage
+      onHold?: boolean;
+    };
   };
 }
 

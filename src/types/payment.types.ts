@@ -97,6 +97,24 @@ export interface Payment extends BasePayment {
     processingFee?: number;
     taxAmount?: number;
     totalAmount?: number;
+    // Razorpay Route specifics
+    razorpay?: {
+      orderId?: string; // order_XXXX
+      paymentId?: string; // pay_XXXX
+      signatureVerified?: boolean;
+      linkedAccountId?: string; // acc_XXXX (landlord)
+      transfers?: Array<{
+        id?: string; // trf_XXXX
+        recipient: string; // acc_XXXX
+        amount: number; // paise
+        status?: 'created' | 'processed' | 'failed' | 'reversed';
+        settlementStatus?: 'pending' | 'processed' | 'failed' | null;
+        processedAt?: number; // epoch seconds
+        errorCode?: string;
+        errorDescription?: string;
+      }>;
+      platformFeePercent?: number;
+    };
   };
   
   // Optional bank details
@@ -154,6 +172,52 @@ export interface Payment extends BasePayment {
     averagePaymentDelay?: number; // in days
   };
 }
+
+// Razorpay webhook payload minimal types we care about
+export interface RazorpayTransferWebhook {
+  event: 'transfer.processed' | 'transfer.failed';
+  payload: {
+    transfer: {
+      entity: {
+        id: string;
+        recipient: string; // acc_XXXX
+        amount: number;
+        status: 'processed' | 'failed';
+        settlement_status: 'processed' | null;
+        source: string; // order_XXXX
+        processed_at?: number | null;
+        error?: {
+          code?: string | null;
+          description?: string | null;
+        };
+      };
+    };
+  };
+}
+
+export interface RazorpaySettlementWebhook {
+  event: 'settlement.processed';
+  payload: {
+    settlement: {
+      entity: {
+        id: string;
+        amount: number;
+        status: 'processed';
+        created_at: number;
+      };
+    };
+  };
+}
+
+export type RazorpayRouteWebhook =
+  | RazorpayTransferWebhook
+  | RazorpaySettlementWebhook
+  | {
+      event:
+        | 'product.route.under_review'
+        | 'product.route.needs_clarification'
+        | 'product.route.activated';
+    };
 
 // Payment validation schema
 export interface PaymentValidation {

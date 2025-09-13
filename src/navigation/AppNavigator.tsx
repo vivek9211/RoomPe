@@ -27,6 +27,7 @@ import PropertySelectionScreen from '../screens/dashboard/PropertySelectionScree
 // Property Screens
 import PropertyListScreen from '../screens/properties/PropertyListScreen';
 import PropertyDetailScreen from '../screens/properties/PropertyDetailScreen';
+import PaymentKycScreen from '../screens/properties/PaymentKycScreen';
 import AssignedPropertyDetailScreen from '../screens/properties/AssignedPropertyDetailScreen';
 import AddPropertyScreen from '../screens/properties/AddPropertyScreen';
 import EditPropertyScreen from '../screens/properties/EditPropertyScreen';
@@ -52,6 +53,7 @@ import TenantApplicationsScreen from '../screens/tenants/TenantApplicationsScree
 import PaymentListScreen from '../screens/payments/PaymentListScreen';
 import PaymentDetailScreen from '../screens/payments/PaymentDetailScreen';
 import AddPaymentScreen from '../screens/payments/AddPaymentScreen';
+import TenantPaymentScreen from '../screens/payments/TenantPaymentScreen';
 
 // Maintenance Screens
 import MaintenanceListScreen from '../screens/maintenance/MaintenanceListScreen';
@@ -182,7 +184,7 @@ const TenantTabNavigator = () => {
       />
       <Tab.Screen
         name="Payments"
-        component={PaymentListScreen}
+        component={TenantPaymentScreen}
         options={{
           tabBarLabel: 'Payments',
           tabBarIcon: ({ color, size }) => (
@@ -250,6 +252,7 @@ const AppNavigator = () => {
             <Stack.Screen name="PropertyDetail" component={PropertyDetailScreen} />
             <Stack.Screen name="AddProperty" component={AddPropertyScreen} />
             <Stack.Screen name="EditProperty" component={EditPropertyScreen} />
+            <Stack.Screen name="PaymentKyc" component={PaymentKycScreen} />
             
             {/* Room Mapping Screens */}
             <Stack.Screen name="RoomMapping" component={RoomMappingScreen} />
@@ -277,6 +280,7 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="TenantTabs" component={TenantTabNavigator} />
             <Stack.Screen name="AssignedPropertyDetail" component={AssignedPropertyDetailScreen} />
+            <Stack.Screen name="TenantPayments" component={TenantPaymentScreen} />
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />

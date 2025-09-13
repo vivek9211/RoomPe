@@ -1,3 +1,6 @@
+java --version
+java 23.0.1 2024-10-15
+
 🔧 1. Prerequisites
 
 Make sure these are installed first:
@@ -218,3 +221,58 @@ async function googleSignIn(params) {
     console.log(error);
   }
 }
+
+
+
+
+Payment: 
+
+// Creating Account: 
+
+curl --location 'http://localhost:4000/payments/route/linked-accounts' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+  "name": "RoomPe Landlord",
+  "email": "vivekchiraura30@gmail.com",
+  "contact": "9135226970",
+  "business_type": "individual",
+  "address": {
+    "street1": "MG Road",
+    "street2": "Near Metro Gate 2",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "postal_code": "560001",
+    "country": "IN"
+  }
+}'
+
+// Get Account Status: 
+
+curl --location 'http://localhost:4000/payments/route/linked-accounts/acc_REfybHsEQ8ICX4'
+
+
+
+// Stackholder
+
+curl --location 'https://api.razorpay.com/v2/accounts/acc_REhxglWob3kmLQ/stakeholders' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Basic cnpwX2xpdmVfUkVma0hNV0h3bmtId0I6RHROQ0RqaElWQ1UyZDJzNUdJNVVkNmdF' \
+--data-raw '{
+    "name": "RoomPe Landlord",
+    "email": "vivek@gmail.com",
+    "relationship": { "executive": true }
+  }'
+
+
+// Adding Sentiment
+
+curl --location --request PATCH 'https://api.razorpay.com/v2/accounts/acc_REhxglWob3kmLQ/products/acc_prd_REi468GEQoMXtO' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Basic cnpwX2xpdmVfUkVma0hNV0h3bmtId0I6RHROQ0RqaElWQ1UyZDJzNUdJNVVkNmdF' \
+--data '{
+    "settlements": {
+      "beneficiary_name": "RoomPe Landlord",
+      "account_number": "51650100002918",
+      "ifsc_code": "BARB0CHIRAU"
+    }
+  }'
