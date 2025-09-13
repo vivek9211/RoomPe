@@ -80,7 +80,11 @@ export class PaymentService {
       }
       
       const tenantId = tenantData.id;
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+      const currentDate = new Date();
+      const currentMonth = currentDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long' 
+      }); // "September 2025" format
       
       // Use simple query to avoid composite index issues
       const snapshot = await firestore().collection(this.collection)
@@ -97,9 +101,22 @@ export class PaymentService {
         ...doc.data()
       } as Payment));
 
-      const currentMonthRent = payments.find(payment => 
+      // Find current month rent payment, prioritizing paid ones
+      const currentMonthRentPayments = payments.filter(payment => 
         payment.type === PaymentType.RENT && payment.month === currentMonth
       );
+      
+      // If there are multiple payments for the same month, prioritize paid ones
+      let currentMonthRent = null;
+      if (currentMonthRentPayments.length > 0) {
+        // First try to find a paid payment
+        currentMonthRent = currentMonthRentPayments.find(payment => payment.status === PaymentStatus.PAID);
+        
+        // If no paid payment found, use the first one (could be pending)
+        if (!currentMonthRent) {
+          currentMonthRent = currentMonthRentPayments[0];
+        }
+      }
 
       return currentMonthRent || null;
     } catch (error) {
@@ -711,6 +728,99 @@ export class PaymentService {
   }
 
   /**
+   * Clean up duplicate payments for the same month
+   * This will help resolve the issue where multiple payments exist for the same month
+   */
+  async cleanupDuplicatePayments(userId: string): Promise<{
+    success: boolean;
+    duplicatesRemoved: number;
+    errors: string[];
+  }> {
+    try {
+      // Get tenant data first
+      const tenantData = await this.getTenantByUserId(userId);
+      if (!tenantData) {
+        return { success: false, duplicatesRemoved: 0, errors: ['Tenant not found'] };
+      }
+      
+      const tenantId = tenantData.id;
+      
+      // Get all payments for the tenant
+      const snapshot = await firestore().collection(this.collection)
+        .where('tenantId', '==', tenantId)
+        .get();
+
+      if (snapshot.empty) {
+        return { success: true, duplicatesRemoved: 0, errors: [] };
+      }
+
+      const payments = snapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      } as Payment));
+
+      // Group payments by month and type
+      const paymentsByMonth = new Map<string, Payment[]>();
+      
+      payments.forEach(payment => {
+        const key = `${payment.month}_${payment.type}`;
+        if (!paymentsByMonth.has(key)) {
+          paymentsByMonth.set(key, []);
+        }
+        paymentsByMonth.get(key)!.push(payment);
+      });
+
+      let duplicatesRemoved = 0;
+      const errors: string[] = [];
+
+      // Process each group to remove duplicates
+      for (const [key, monthPayments] of paymentsByMonth) {
+        if (monthPayments.length > 1) {
+          // Sort by status priority: PAID > PENDING > OVERDUE > FAILED
+          const statusPriority: Record<string, number> = {
+            [PaymentStatus.PAID]: 1,
+            [PaymentStatus.PENDING]: 2,
+            [PaymentStatus.OVERDUE]: 3,
+            [PaymentStatus.FAILED]: 4,
+            [PaymentStatus.CANCELLED]: 5,
+            [PaymentStatus.REFUNDED]: 6,
+            [PaymentStatus.PARTIAL]: 7,
+            [PaymentStatus.WAIVED]: 8
+          };
+
+          monthPayments.sort((a, b) => {
+            const aPriority = statusPriority[a.status] || 999;
+            const bPriority = statusPriority[b.status] || 999;
+            return aPriority - bPriority;
+          });
+
+          // Keep the first payment (highest priority), delete the rest
+          const paymentToKeep = monthPayments[0];
+          const paymentsToDelete = monthPayments.slice(1);
+
+          console.log(`Found ${monthPayments.length} duplicate payments for ${key}. Keeping payment ${paymentToKeep.id} with status ${paymentToKeep.status}`);
+
+          // Delete duplicate payments
+          for (const payment of paymentsToDelete) {
+            try {
+              await firestore().collection(this.collection).doc(payment.id).delete();
+              duplicatesRemoved++;
+              console.log(`Deleted duplicate payment ${payment.id} with status ${payment.status}`);
+            } catch (error: any) {
+              errors.push(`Failed to delete payment ${payment.id}: ${error.message}`);
+            }
+          }
+        }
+      }
+
+      return { success: true, duplicatesRemoved, errors };
+    } catch (error: any) {
+      console.error('Error cleaning up duplicate payments:', error);
+      return { success: false, duplicatesRemoved: 0, errors: [error.message] };
+    }
+  }
+
+  /**
    * Get tenant-based payment stats (using real rent amount from tenant collection)
    */
   async getTenantBasedPaymentStats(userId: string): Promise<PaymentStats> {
@@ -734,58 +844,88 @@ export class PaymentService {
       // Get actual payments
       const payments = await this.getTenantPayments(userId);
       
-      // Calculate stats based on tenant rent amount
+      // Calculate stats based on actual payments
       const monthlyRent = tenantData.rent || 0;
       const currentDate = new Date();
+      const currentMonth = currentDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long' 
+      });
       
-      // Initialize stats with current month only
+      // Initialize stats
       const stats: PaymentStats = {
-        totalPayments: 1, // Only current month
-        totalAmount: monthlyRent, // Only current month amount
+        totalPayments: payments.length,
+        totalAmount: 0,
         paidAmount: 0,
-        pendingAmount: monthlyRent, // Current month rent
+        pendingAmount: 0,
         overdueAmount: 0,
         averagePaymentDelay: 0,
         totalLatePayments: 0,
         totalLateFees: 0
       };
 
-      // Update stats based on actual payments
+      // Calculate stats based on actual payments, handling duplicates
       let hasCurrentMonthPayment = false;
+      let currentMonthPaid = false;
+      
+      // Group payments by month to handle duplicates
+      const paymentsByMonth = new Map<string, Payment[]>();
       
       payments.forEach(payment => {
-        // Check if this is a current month payment
-        const currentMonth = currentDate.toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long' 
-        });
-        
-        if (payment.month === currentMonth) {
-          hasCurrentMonthPayment = true;
+        if (!paymentsByMonth.has(payment.month)) {
+          paymentsByMonth.set(payment.month, []);
         }
-        
-        switch (payment.status) {
-          case PaymentStatus.PAID:
-            stats.paidAmount += payment.amount;
-            if (payment.month === currentMonth) {
-              stats.pendingAmount = 0; // Current month is paid
+        paymentsByMonth.get(payment.month)!.push(payment);
+      });
+      
+      // Process each month's payments
+      paymentsByMonth.forEach((monthPayments, month) => {
+        if (month === currentMonth) {
+          hasCurrentMonthPayment = true;
+          
+          // For current month, prioritize paid payments
+          const paidPayment = monthPayments.find(p => p.status === PaymentStatus.PAID);
+          if (paidPayment) {
+            currentMonthPaid = true;
+            stats.totalAmount += paidPayment.amount;
+            stats.paidAmount += paidPayment.amount;
+            stats.totalPayments += 1;
+          } else {
+            // Use the first pending payment if no paid payment
+            const pendingPayment = monthPayments.find(p => p.status === PaymentStatus.PENDING);
+            if (pendingPayment) {
+              stats.totalAmount += pendingPayment.amount;
+              stats.pendingAmount += pendingPayment.amount;
+              stats.totalPayments += 1;
             }
-            break;
-          case PaymentStatus.OVERDUE:
-            stats.overdueAmount += payment.amount;
-            stats.totalLatePayments++;
-            break;
-          case PaymentStatus.PENDING:
-            if (payment.month === currentMonth) {
-              stats.pendingAmount = payment.amount; // Use actual payment amount
+          }
+        } else {
+          // For other months, process all payments
+          monthPayments.forEach(payment => {
+            stats.totalAmount += payment.amount;
+            stats.totalPayments += 1;
+            
+            switch (payment.status) {
+              case PaymentStatus.PAID:
+                stats.paidAmount += payment.amount;
+                break;
+              case PaymentStatus.OVERDUE:
+                stats.overdueAmount += payment.amount;
+                stats.totalLatePayments++;
+                break;
+              case PaymentStatus.PENDING:
+                stats.pendingAmount += payment.amount;
+                break;
             }
-            break;
+          });
         }
       });
       
-      // If no current month payment exists, keep the default monthly rent
+      // If no current month payment exists, add it to pending
       if (!hasCurrentMonthPayment) {
-        stats.pendingAmount = monthlyRent;
+        stats.totalAmount += monthlyRent;
+        stats.pendingAmount += monthlyRent;
+        stats.totalPayments += 1;
       }
 
       return stats;

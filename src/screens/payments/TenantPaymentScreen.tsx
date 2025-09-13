@@ -72,46 +72,76 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
     processOnlinePayment,
     verifyPayment,
     syncAllPayments,
+    cleanupDuplicatePayments,
     clearError
   } = usePayments();
 
   const [refreshing, setRefreshing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
+  const [autoSyncCompleted, setAutoSyncCompleted] = useState(false);
 
-  // Auto-sync payment status when screen loads
+  // Auto-sync payment status when screen loads (only once)
   useEffect(() => {
+    if (autoSyncCompleted) return; // Prevent multiple auto-syncs
+    
+    let isMounted = true;
+    
     const autoSyncPayments = async () => {
       try {
-        // Only sync if there are pending payments with transaction IDs
+        // First cleanup any duplicate payments
+        const cleanupResult = await cleanupDuplicatePayments();
+        if (isMounted && cleanupResult.success && cleanupResult.duplicatesRemoved > 0) {
+          console.log(`Auto-cleanup: Removed ${cleanupResult.duplicatesRemoved} duplicate payments`);
+        }
+        
+        // Then sync if there are pending payments with transaction IDs
         const hasPendingPaymentsWithTransactionId = pendingPayments.some(
           payment => payment.transactionId && (payment.status === PaymentStatus.PENDING || payment.status === PaymentStatus.OVERDUE)
         );
         
-        if (hasPendingPaymentsWithTransactionId) {
+        if (isMounted && hasPendingPaymentsWithTransactionId) {
           console.log('Auto-syncing pending payments with Razorpay...');
           const result = await syncAllPayments();
-          if (result.success && result.updated > 0) {
+          if (isMounted && result.success && result.updated > 0) {
             console.log(`Auto-sync completed: ${result.updated} payments updated`);
           }
+        }
+        
+        if (isMounted) {
+          setAutoSyncCompleted(true);
         }
       } catch (error) {
         console.error('Auto-sync failed:', error);
         // Don't show error to user for auto-sync failures
+        if (isMounted) {
+          setAutoSyncCompleted(true);
+        }
       }
     };
 
     // Run auto-sync after a short delay to allow initial data to load
     const timer = setTimeout(autoSyncPayments, 2000);
-    return () => clearTimeout(timer);
-  }, [pendingPayments, syncAllPayments]);
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, []); // Empty dependency array - only run once on mount
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setAutoSyncCompleted(false); // Reset auto-sync flag for manual refresh
     try {
-      // First sync all pending payments with Razorpay
+      // First cleanup any duplicate payments
+      const cleanupResult = await cleanupDuplicatePayments();
+      if (cleanupResult.success && cleanupResult.duplicatesRemoved > 0) {
+        console.log(`Cleaned up ${cleanupResult.duplicatesRemoved} duplicate payments`);
+      }
+      
+      // Then sync all pending payments with Razorpay
       await syncAllPayments();
       
-      // Then reload all payment data
+      // Finally reload all payment data
       await Promise.all([
         loadPayments(),
         loadCurrentMonthRent(),

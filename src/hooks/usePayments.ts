@@ -60,42 +60,48 @@ export const usePayments = () => {
     }
   }, [userProfile?.uid]);
 
-  // Load current month's rent from tenant data
+  // Load current month's rent from actual payment records
   const loadCurrentMonthRent = useCallback(async () => {
     if (!userProfile?.uid) return;
 
     try {
       setError(null);
       
-      // Get tenant data to show current month rent
-      const tenantData = await getTenantRentInfo();
+      // First, try to get the actual current month payment from Firestore
+      const actualPayment = await paymentService.getCurrentMonthRent(userProfile.uid);
       
-      if (tenantData && tenantData.rent) {
-        // Create a virtual payment object for display
-        const currentDate = new Date();
-        const month = currentDate.toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long' 
-        });
-        
-        const virtualPayment: Payment = {
-          id: 'current-month',
-          tenantId: tenantData.id, // Use actual tenant ID, not user ID
-          propertyId: tenantData.propertyId,
-          roomId: tenantData.roomId,
-          amount: tenantData.rent,
-          type: PaymentType.RENT,
-          status: PaymentStatus.PENDING,
-          month: month,
-          dueDate: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1) as any,
-          createdAt: new Date() as any,
-          updatedAt: new Date() as any,
-          description: `Monthly rent for ${month}`,
-        };
-        
-        setCurrentMonthRent(virtualPayment);
+      if (actualPayment) {
+        // Use the actual payment record
+        setCurrentMonthRent(actualPayment);
       } else {
-        setCurrentMonthRent(null);
+        // If no actual payment exists, create a virtual one for display
+        const tenantData = await getTenantRentInfo();
+        
+        if (tenantData && tenantData.rent) {
+          const currentDate = new Date();
+          const month = currentDate.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long' 
+          });
+          
+          const virtualPayment: Payment = {
+            id: 'current-month',
+            tenantId: tenantData.id,
+            propertyId: tenantData.propertyId,
+            roomId: tenantData.roomId,
+            amount: tenantData.rent,
+            type: PaymentType.RENT,
+            status: PaymentStatus.PENDING,
+            month: month,
+            dueDate: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1) as any,
+            createdAt: new Date() as any,
+            updatedAt: new Date() as any,
+          };
+          
+          setCurrentMonthRent(virtualPayment);
+        } else {
+          setCurrentMonthRent(null);
+        }
       }
     } catch (err: any) {
       console.error('Error loading current month rent:', err);
@@ -257,6 +263,36 @@ export const usePayments = () => {
     }
   }, [userProfile?.uid, loadPayments, loadCurrentMonthRent, loadPendingPayments, loadPaymentStats]);
 
+  // Clean up duplicate payments
+  const cleanupDuplicatePayments = useCallback(async () => {
+    if (!userProfile?.uid) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await paymentService.cleanupDuplicatePayments(userProfile.uid);
+      
+      if (result.success && result.duplicatesRemoved > 0) {
+        // Reload all payment data after cleanup
+        await Promise.all([
+          loadPayments(),
+          loadCurrentMonthRent(),
+          loadPendingPayments(),
+          loadPaymentStats()
+        ]);
+      }
+      
+      return result;
+    } catch (err: any) {
+      setError(err.message || 'Failed to cleanup duplicate payments');
+      console.error('Error cleaning up duplicate payments:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [userProfile?.uid, loadPayments, loadCurrentMonthRent, loadPendingPayments, loadPaymentStats]);
+
   // Removed createMonthlyRentPayment function - no longer needed
 
   // Removed generateMonthlyRentPayments function - no longer needed
@@ -273,7 +309,7 @@ export const usePayments = () => {
     }
   }, [userProfile?.uid, loadPayments, loadCurrentMonthRent, loadPendingPayments, loadPaymentStats]);
 
-  // Get total outstanding amount (only current month + overdue)
+  // Get total outstanding amount (pending + overdue)
   const getTotalOutstanding = useCallback(() => {
     // If we have payment stats, use those for more accurate calculation
     if (paymentStats) {
@@ -327,6 +363,7 @@ export const usePayments = () => {
     verifyPayment,
     syncPaymentStatus,
     syncAllPayments,
+    cleanupDuplicatePayments,
     
     // Computed values
     totalOutstanding: getTotalOutstanding(),
@@ -337,5 +374,3 @@ export const usePayments = () => {
     clearError: () => setError(null),
   };
 };
-
-export { usePayments };
