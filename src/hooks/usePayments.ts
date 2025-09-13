@@ -19,6 +19,12 @@ export const usePayments = () => {
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSyncResult, setLastSyncResult] = useState<{
+    success: boolean;
+    synced: number;
+    updated: number;
+    errors: string[];
+  } | null>(null);
 
   // Get tenant rent information for display
   const getTenantRentInfo = useCallback(async () => {
@@ -167,8 +173,8 @@ export const usePayments = () => {
   // Verify payment
   const verifyPayment = useCallback(async (paymentId: string, orderId: string, razorpayPaymentId: string, signature: string) => {
     try {
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
       
       const success = await paymentService.verifyPayment(paymentId, orderId, razorpayPaymentId, signature);
       
@@ -191,6 +197,65 @@ export const usePayments = () => {
       setLoading(false);
     }
   }, [loadPayments, loadCurrentMonthRent, loadPendingPayments, loadPaymentStats]);
+
+  // Sync payment status from Razorpay
+  const syncPaymentStatus = useCallback(async (paymentId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await paymentService.syncPaymentStatusFromRazorpay(paymentId);
+      
+      if (result.success && result.updated) {
+        // Reload all payment data if status was updated
+        await Promise.all([
+          loadPayments(),
+          loadCurrentMonthRent(),
+          loadPendingPayments(),
+          loadPaymentStats()
+        ]);
+      }
+      
+      return result;
+    } catch (err: any) {
+      setError(err.message || 'Failed to sync payment status');
+      console.error('Error syncing payment status:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [loadPayments, loadCurrentMonthRent, loadPendingPayments, loadPaymentStats]);
+
+  // Sync all pending payments with Razorpay
+  const syncAllPayments = useCallback(async () => {
+    if (!userProfile?.uid) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await paymentService.syncAllPendingPayments(userProfile.uid);
+      setLastSyncResult(result);
+      
+      if (result.success && result.updated > 0) {
+        // Reload all payment data if any payments were updated
+        await Promise.all([
+          loadPayments(),
+          loadCurrentMonthRent(),
+          loadPendingPayments(),
+          loadPaymentStats()
+        ]);
+      }
+      
+      return result;
+    } catch (err: any) {
+      setError(err.message || 'Failed to sync payments');
+      console.error('Error syncing all payments:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [userProfile?.uid, loadPayments, loadCurrentMonthRent, loadPendingPayments, loadPaymentStats]);
 
   // Removed createMonthlyRentPayment function - no longer needed
 
@@ -251,6 +316,7 @@ export const usePayments = () => {
     paymentStats,
     loading,
     error,
+    lastSyncResult,
     
     // Actions
     loadPayments,
@@ -259,6 +325,8 @@ export const usePayments = () => {
     loadPaymentStats,
     processOnlinePayment,
     verifyPayment,
+    syncPaymentStatus,
+    syncAllPayments,
     
     // Computed values
     totalOutstanding: getTotalOutstanding(),

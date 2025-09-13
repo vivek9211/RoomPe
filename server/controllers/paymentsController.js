@@ -164,6 +164,51 @@ export async function verifyPayment(req, res) {
   }
 }
  
+// Fetch order status from Razorpay
+export async function getOrderStatus(req, res) {
+  try {
+    const { orderId } = req.params;
+    if (!orderId) return res.status(400).json({ error: 'Missing orderId' });
+    
+    const order = await razorpay.orders.fetch(orderId);
+    
+    // Get payment details if order is paid
+    let paymentDetails = null;
+    if (order.status === 'paid' && order.payments && order.payments.length > 0) {
+      try {
+        const paymentId = order.payments[0];
+        const payment = await razorpay.payments.fetch(paymentId);
+        paymentDetails = {
+          id: payment.id,
+          status: payment.status,
+          method: payment.method,
+          amount: payment.amount,
+          currency: payment.currency,
+          captured: payment.captured,
+          created_at: payment.created_at,
+          description: payment.description,
+          notes: payment.notes
+        };
+      } catch (paymentError) {
+        console.error('Error fetching payment details:', paymentError);
+      }
+    }
+    
+    return res.json({
+      orderId: order.id,
+      status: order.status,
+      amount: order.amount,
+      currency: order.currency,
+      created_at: order.created_at,
+      notes: order.notes,
+      paymentDetails
+    });
+  } catch (e) {
+    console.error('Error fetching order status:', e);
+    return res.status(500).json({ error: 'Failed to fetch order status' });
+  }
+}
+
 export function webhooks(req, res) {
   try {
     const rawBody = req.body; // Buffer (express.raw)

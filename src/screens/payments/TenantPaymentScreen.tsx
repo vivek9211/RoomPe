@@ -71,15 +71,47 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
     loadPaymentStats,
     processOnlinePayment,
     verifyPayment,
+    syncAllPayments,
     clearError
   } = usePayments();
 
   const [refreshing, setRefreshing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
 
+  // Auto-sync payment status when screen loads
+  useEffect(() => {
+    const autoSyncPayments = async () => {
+      try {
+        // Only sync if there are pending payments with transaction IDs
+        const hasPendingPaymentsWithTransactionId = pendingPayments.some(
+          payment => payment.transactionId && (payment.status === PaymentStatus.PENDING || payment.status === PaymentStatus.OVERDUE)
+        );
+        
+        if (hasPendingPaymentsWithTransactionId) {
+          console.log('Auto-syncing pending payments with Razorpay...');
+          const result = await syncAllPayments();
+          if (result.success && result.updated > 0) {
+            console.log(`Auto-sync completed: ${result.updated} payments updated`);
+          }
+        }
+      } catch (error) {
+        console.error('Auto-sync failed:', error);
+        // Don't show error to user for auto-sync failures
+      }
+    };
+
+    // Run auto-sync after a short delay to allow initial data to load
+    const timer = setTimeout(autoSyncPayments, 2000);
+    return () => clearTimeout(timer);
+  }, [pendingPayments, syncAllPayments]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
+      // First sync all pending payments with Razorpay
+      await syncAllPayments();
+      
+      // Then reload all payment data
       await Promise.all([
         loadPayments(),
         loadCurrentMonthRent(),
@@ -124,6 +156,8 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
         },
         handler: async (response: any) => {
           try {
+            console.log('Payment response received:', response);
+            
             // Verify payment
             const isVerified = await verifyPayment(
               payment.id,
@@ -136,10 +170,15 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
               Alert.alert('Success', 'Payment completed successfully!');
               onRefresh();
             } else {
-              Alert.alert('Error', 'Payment verification failed');
+              Alert.alert('Error', 'Payment verification failed. The payment status will be synced automatically.');
+              onRefresh(); // Refresh to trigger auto-sync
             }
           } catch (error) {
-            Alert.alert('Error', 'Payment verification failed');
+            console.error('Payment handler error:', error);
+            Alert.alert('Error', 'Payment verification failed. The payment status will be synced automatically.');
+            onRefresh(); // Refresh to trigger auto-sync
+          } finally {
+            setProcessingPayment(null);
           }
         },
         modal: {
@@ -238,21 +277,7 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
           )}
         </View>
         
-        {payment.status === PaymentStatus.PENDING || payment.status === PaymentStatus.OVERDUE ? (
-          <TouchableOpacity
-            style={[styles.payButton, isProcessing && styles.payButtonDisabled]}
-            onPress={() => handlePayNow(payment)}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <Text style={styles.payButtonText}>
-                Pay ₹{formatCurrency(totalAmount)}
-              </Text>
-            )}
-          </TouchableOpacity>
-        ) : null}
+        {/* No Pay Now button in payment history - only show for current month */}
       </View>
     );
   };
@@ -623,20 +648,6 @@ const styles = StyleSheet.create({
     fontSize: fonts.sm,
     color: colors.textPrimary,
     fontWeight: '500',
-  },
-  payButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: dimensions.spacing.sm,
-    borderRadius: dimensions.borderRadius.md,
-    alignItems: 'center',
-  },
-  payButtonDisabled: {
-    opacity: 0.6,
-  },
-  payButtonText: {
-    color: colors.white,
-    fontSize: fonts.md,
-    fontWeight: '600',
   },
   emptyState: {
     backgroundColor: colors.white,

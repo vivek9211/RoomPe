@@ -132,10 +132,52 @@ export async function getRouteAccountStatus(accountId: string) {
   };
 }
 
+export interface OrderStatusResponse {
+  orderId: string;
+  status: 'created' | 'attempted' | 'paid' | 'failed';
+  amount: number;
+  currency: string;
+  created_at: number;
+  notes?: Record<string, string>;
+  paymentDetails?: {
+    id: string;
+    status: string;
+    method: string;
+    amount: number;
+    currency: string;
+    captured: boolean;
+    created_at: number;
+    description?: string;
+    notes?: Record<string, string>;
+  };
+}
+
+export async function getOrderStatus(orderId: string): Promise<OrderStatusResponse> {
+  try {
+    const res = await fetch(`${BASE_URL}/payments/route/orders/${orderId}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(`Failed to fetch order status: ${res.status} ${res.statusText} - ${errorData.error || 'Unknown error'}`);
+    }
+    
+    return (await res.json()) as OrderStatusResponse;
+  } catch (error: any) {
+    if (error.message.includes('Network request failed')) {
+      throw new Error(`Cannot connect to payment server at ${BASE_URL}. Make sure the server is running.`);
+    }
+    throw error;
+  }
+}
+
 export default {
   createLinkedAccount,
   updateLinkedAccountSettlements,
   createOrderWithTransfers,
   verifyPaymentSignature,
-  getRouteAccountStatus
+  getRouteAccountStatus,
+  getOrderStatus
 };

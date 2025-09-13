@@ -10,7 +10,7 @@ import {
   PaymentStatus,
   PaymentMethod
 } from '../../types/payment.types';
-import { createOrderWithTransfers, verifyPaymentSignature } from './paymentApi';
+import { createOrderWithTransfers, verifyPaymentSignature, getOrderStatus } from './paymentApi';
 
 export class PaymentService {
   private collection = 'payments';
@@ -578,6 +578,135 @@ export class PaymentService {
     } catch (error) {
       console.error('Error getting property by ID:', error);
       throw new Error('Failed to get property');
+    }
+  }
+
+  /**
+   * Sync payment status from Razorpay for a specific payment
+   */
+  async syncPaymentStatusFromRazorpay(paymentId: string): Promise<{
+    success: boolean;
+    updated: boolean;
+    newStatus?: PaymentStatus;
+    error?: string;
+  }> {
+    try {
+      // Get payment document
+      const payment = await this.getPaymentById(paymentId);
+      if (!payment) {
+        return { success: false, updated: false, error: 'Payment not found' };
+      }
+
+      // Check if payment has a transaction ID (Razorpay order ID)
+      if (!payment.transactionId) {
+        return { success: false, updated: false, error: 'No transaction ID found for this payment' };
+      }
+
+      // Fetch order status from Razorpay
+      const orderStatus = await getOrderStatus(payment.transactionId);
+      
+      // Map Razorpay status to our PaymentStatus
+      let newStatus: PaymentStatus;
+      switch (orderStatus.status) {
+        case 'paid':
+          newStatus = PaymentStatus.PAID;
+          break;
+        case 'failed':
+          newStatus = PaymentStatus.FAILED;
+          break;
+        case 'created':
+        case 'attempted':
+          newStatus = PaymentStatus.PENDING;
+          break;
+        default:
+          newStatus = PaymentStatus.PENDING;
+      }
+
+      // Check if status needs to be updated
+      if (payment.status === newStatus) {
+        return { success: true, updated: false };
+      }
+
+      // Update payment status
+      const updateData: any = {
+        status: newStatus,
+        updatedAt: Timestamp.now()
+      };
+
+      // If payment is now paid, add payment details
+      if (newStatus === PaymentStatus.PAID && orderStatus.paymentDetails) {
+        updateData.paidAt = Timestamp.fromDate(new Date(orderStatus.paymentDetails.created_at * 1000));
+        updateData.paymentMethod = PaymentMethod.ONLINE;
+        // Update transaction ID to actual payment ID if available
+        if (orderStatus.paymentDetails.id) {
+          updateData.transactionId = orderStatus.paymentDetails.id;
+        }
+      }
+
+      await this.updatePaymentStatus(paymentId, newStatus, updateData);
+
+      return { 
+        success: true, 
+        updated: true, 
+        newStatus 
+      };
+    } catch (error: any) {
+      console.error('Error syncing payment status from Razorpay:', error);
+      return { 
+        success: false, 
+        updated: false, 
+        error: error.message || 'Failed to sync payment status' 
+      };
+    }
+  }
+
+  /**
+   * Sync all pending payments with Razorpay status
+   */
+  async syncAllPendingPayments(userId: string): Promise<{
+    success: boolean;
+    synced: number;
+    updated: number;
+    errors: string[];
+  }> {
+    try {
+      // Get all pending payments for the user
+      const pendingPayments = await this.getPendingPayments(userId);
+      
+      const results = {
+        success: true,
+        synced: 0,
+        updated: 0,
+        errors: [] as string[]
+      };
+
+      // Sync each payment that has a transaction ID
+      for (const payment of pendingPayments) {
+        if (payment.transactionId) {
+          try {
+            results.synced++;
+            const syncResult = await this.syncPaymentStatusFromRazorpay(payment.id);
+            if (syncResult.updated) {
+              results.updated++;
+            }
+            if (syncResult.error) {
+              results.errors.push(`Payment ${payment.id}: ${syncResult.error}`);
+            }
+          } catch (error: any) {
+            results.errors.push(`Payment ${payment.id}: ${error.message}`);
+          }
+        }
+      }
+
+      return results;
+    } catch (error: any) {
+      console.error('Error syncing all pending payments:', error);
+      return {
+        success: false,
+        synced: 0,
+        updated: 0,
+        errors: [error.message || 'Failed to sync payments']
+      };
     }
   }
 
