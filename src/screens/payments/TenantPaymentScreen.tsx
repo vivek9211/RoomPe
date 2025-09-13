@@ -70,6 +70,7 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
     loadPendingPayments,
     loadPaymentStats,
     processOnlinePayment,
+    verifyPayment,
     clearError
   } = usePayments();
 
@@ -101,34 +102,62 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
     try {
       setProcessingPayment(payment.id);
       
-      // For now, show a simple alert. In a real app, you would integrate with Razorpay
-      Alert.alert(
-        'Payment',
-        `Pay ₹${payment.amount}${payment.lateFee ? ` + ₹${payment.lateFee} late fee` : ''} for ${payment.month}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Pay Now', 
-            onPress: async () => {
-              try {
-                // Simulate payment processing
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // In a real app, you would call processOnlinePayment here
-                // const result = await processOnlinePayment(payment.id, payment.propertyId);
-                
-                Alert.alert('Success', 'Payment processed successfully!');
-                onRefresh();
-              } catch (err: any) {
-                Alert.alert('Error', err.message || 'Payment failed');
-              }
+      // Process payment using Razorpay Route
+      const result = await processOnlinePayment(payment.id, payment.propertyId);
+      
+      // Initialize Razorpay checkout
+      const options = {
+        description: `Rent payment for ${payment.month}`,
+        image: 'https://your-app-logo-url.com/logo.png', // Replace with your app logo
+        currency: 'INR',
+        key: result.keyId,
+        amount: result.amount,
+        name: 'RoomPe',
+        order_id: result.orderId,
+        prefill: {
+          email: userProfile.email || '',
+          contact: userProfile.phone || '',
+          name: userProfile.name || '',
+        },
+        theme: {
+          color: colors.primary,
+        },
+        handler: async (response: any) => {
+          try {
+            // Verify payment
+            const isVerified = await verifyPayment(
+              payment.id,
+              response.razorpay_order_id,
+              response.razorpay_payment_id,
+              response.razorpay_signature
+            );
+            
+            if (isVerified) {
+              Alert.alert('Success', 'Payment completed successfully!');
+              onRefresh();
+            } else {
+              Alert.alert('Error', 'Payment verification failed');
             }
+          } catch (error) {
+            Alert.alert('Error', 'Payment verification failed');
           }
-        ]
-      );
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to process payment');
-    } finally {
+        },
+        modal: {
+          ondismiss: () => {
+            setProcessingPayment(null);
+          },
+        },
+      };
+
+      // Open Razorpay checkout
+      const RazorpayCheckout = require('react-native-razorpay').default;
+      RazorpayCheckout.open(options).catch((error: any) => {
+        Alert.alert('Error', 'Payment cancelled or failed');
+        setProcessingPayment(null);
+      });
+      
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to process payment');
       setProcessingPayment(null);
     }
   };

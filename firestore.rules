@@ -48,6 +48,10 @@ service cloud.firestore {
       allow read: if request.auth != null && 
         (resource.data.ownerId == request.auth.uid ||
          request.auth.uid in resource.data.tenantIds);
+      
+      // Allow tenants to read properties for payment processing
+      // This allows tenants to read property data to check payment settings
+      allow read: if request.auth != null;
     }
 
     // Allow users to manage room mappings for properties they own
@@ -90,8 +94,13 @@ service cloud.firestore {
     // Payments collection rules
     match /payments/{paymentId} {
       // Allow tenants to read their own payments
+      // Check if the user is a tenant and the payment belongs to them
       allow read: if request.auth != null && 
-        resource.data.tenantId == request.auth.uid;
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId) ||
+         // Allow if user is a tenant for this payment (check tenant document)
+         (exists(/databases/$(database)/documents/tenants/$(resource.data.tenantId)) &&
+          get(/databases/$(database)/documents/tenants/$(resource.data.tenantId)).data.userId == request.auth.uid));
       
       // Allow property owners to read payments for their properties
       allow read: if request.auth != null && 
@@ -99,7 +108,10 @@ service cloud.firestore {
       
       // Allow tenants to create payments (for manual payments)
       allow create: if request.auth != null && 
-        request.resource.data.tenantId == request.auth.uid;
+        (request.resource.data.tenantId == request.auth.uid ||
+         // Allow if user is a tenant for this payment (check tenant document)
+         (exists(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)) &&
+          get(/databases/$(database)/documents/tenants/$(request.resource.data.tenantId)).data.userId == request.auth.uid));
       
       // Allow property owners to create payments for their properties
       allow create: if request.auth != null && 
@@ -107,7 +119,11 @@ service cloud.firestore {
       
       // Allow tenants to update their own payments (for payment status updates)
       allow update: if request.auth != null && 
-        resource.data.tenantId == request.auth.uid;
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId) ||
+         // Allow if user is a tenant for this payment (check tenant document)
+         (exists(/databases/$(database)/documents/tenants/$(resource.data.tenantId)) &&
+          get(/databases/$(database)/documents/tenants/$(resource.data.tenantId)).data.userId == request.auth.uid));
       
       // Allow property owners to update payments for their properties
       allow update: if request.auth != null && 

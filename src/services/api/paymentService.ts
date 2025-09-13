@@ -20,8 +20,17 @@ export class PaymentService {
   /**
    * Get payments for a specific tenant
    */
-  async getTenantPayments(tenantId: string, filters?: PaymentFilters): Promise<Payment[]> {
+  async getTenantPayments(userId: string, filters?: PaymentFilters): Promise<Payment[]> {
     try {
+      // Get tenant data first to get the actual tenant ID
+      const tenantData = await this.getTenantByUserId(userId);
+      if (!tenantData) {
+        // Return empty array if tenant not found (user might not be a tenant yet)
+        return [];
+      }
+      
+      const tenantId = tenantData.id;
+
       // Start with basic query to avoid composite index issues
       let query = firestore().collection(this.collection)
         .where('tenantId', '==', tenantId);
@@ -62,8 +71,15 @@ export class PaymentService {
   /**
    * Get current month's rent payment for a tenant
    */
-  async getCurrentMonthRent(tenantId: string): Promise<Payment | null> {
+  async getCurrentMonthRent(userId: string): Promise<Payment | null> {
     try {
+      // Get tenant data first to get the actual tenant ID
+      const tenantData = await this.getTenantByUserId(userId);
+      if (!tenantData) {
+        return null;
+      }
+      
+      const tenantId = tenantData.id;
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
       
       // Use simple query to avoid composite index issues
@@ -95,8 +111,16 @@ export class PaymentService {
   /**
    * Get pending payments for a tenant
    */
-  async getPendingPayments(tenantId: string): Promise<Payment[]> {
+  async getPendingPayments(userId: string): Promise<Payment[]> {
     try {
+      // Get tenant data first to get the actual tenant ID
+      const tenantData = await this.getTenantByUserId(userId);
+      if (!tenantData) {
+        return [];
+      }
+      
+      const tenantId = tenantData.id;
+
       // Use simple query to avoid composite index issues
       const snapshot = await firestore().collection(this.collection)
         .where('tenantId', '==', tenantId)
@@ -159,43 +183,128 @@ export class PaymentService {
   /**
    * Process online payment using Razorpay
    */
-  async processOnlinePayment(paymentId: string, tenantId: string, propertyId: string): Promise<{
+  async processOnlinePayment(paymentId: string, userId: string, propertyId: string): Promise<{
     orderId: string;
     amount: number;
     keyId: string;
   }> {
     try {
-      // Get payment details
-      const paymentDoc = await firestore().collection(this.collection).doc(paymentId).get();
-      if (!paymentDoc.exists) {
-        throw new Error('Payment not found');
+      console.log('Starting processOnlinePayment with:', { paymentId, userId, propertyId });
+      
+      // Get tenant data first to get the actual tenant ID
+      console.log('Getting tenant data for user:', userId);
+      const tenantData = await this.getTenantByUserId(userId);
+      if (!tenantData) {
+        throw new Error('Tenant not found. Please ensure you are properly registered as a tenant.');
       }
-      const payment = paymentDoc.data();
-      if (!payment) {
-        throw new Error('Payment data not found');
+      
+      const tenantId = tenantData.id;
+      console.log('Found tenant ID:', tenantId);
+
+      let payment: any;
+      let actualPaymentId = paymentId;
+
+      // Check if this is a virtual payment (current-month)
+      if (paymentId === 'current-month') {
+        console.log('Creating payment document for virtual payment');
+        // Create a real payment document for the current month
+        const currentDate = new Date();
+        const month = currentDate.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long' 
+        });
+        
+        const paymentData = {
+          tenantId: tenantId,
+          propertyId: propertyId,
+          roomId: tenantData.roomId,
+          amount: tenantData.rent,
+          type: PaymentType.RENT,
+          status: PaymentStatus.PENDING,
+          month: month,
+          dueDate: Timestamp.fromDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)),
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          description: `Monthly rent for ${month}`,
+        };
+
+        console.log('Payment data to create:', paymentData);
+        console.log('Current user ID:', userId);
+        console.log('Tenant ID:', tenantId);
+
+        // Create the payment document
+        try {
+          const paymentRef = await firestore().collection(this.collection).add(paymentData);
+          actualPaymentId = paymentRef.id;
+          payment = paymentData;
+          console.log('Created payment document with ID:', actualPaymentId);
+        } catch (createError: any) {
+          console.error('Error creating payment document:', createError);
+          console.error('Create error details:', {
+            message: createError.message,
+            code: createError.code,
+            stack: createError.stack
+          });
+          throw createError;
+        }
+      } else {
+        // Get payment details from existing document
+        console.log('Getting payment document:', paymentId);
+        const paymentDoc = await firestore().collection(this.collection).doc(paymentId).get();
+        if (!paymentDoc.exists) {
+          throw new Error('Payment not found');
+        }
+        payment = paymentDoc.data();
+        if (!payment) {
+          throw new Error('Payment data not found');
+        }
+        console.log('Payment data retrieved successfully');
       }
 
-      // Create Razorpay order
+      // Get property data to check Razorpay linked account
+      console.log('Getting property data:', propertyId);
+      const property = await this.getPropertyById(propertyId);
+      if (!property) {
+        throw new Error('Property not found');
+      }
+      console.log('Property data retrieved successfully');
+
+      // Check if property has Razorpay linked account
+      const linkedAccountId = property.payments?.linkedAccountId;
+      if (!linkedAccountId) {
+        throw new Error('Property owner has not set up payment account. Please contact the property owner to set up their payment account.');
+      }
+
+      // Create Razorpay order with transfers to property owner
+      console.log('Creating Razorpay order...');
       const orderData = await createOrderWithTransfers({
         tenantId,
         propertyId,
         amount: payment.amount,
         currency: 'INR'
       });
+      console.log('Razorpay order created:', orderData.orderId);
 
       // Update payment with order details
-      await this.updatePaymentStatus(paymentId, PaymentStatus.PENDING, {
+      console.log('Updating payment status...');
+      await this.updatePaymentStatus(actualPaymentId, PaymentStatus.PENDING, {
         transactionId: orderData.orderId,
         paymentMethod: PaymentMethod.ONLINE
       });
+      console.log('Payment status updated successfully');
 
       return {
         orderId: orderData.orderId,
         amount: orderData.amount,
         keyId: orderData.keyId
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing online payment:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
       throw new Error('Failed to process online payment');
     }
   }
@@ -212,9 +321,26 @@ export class PaymentService {
         signature
       });
 
+      let actualPaymentId = paymentId;
+
+      // If this was a virtual payment, we need to find the actual payment document
+      if (paymentId === 'current-month') {
+        // Find the payment document that was created for this order
+        const paymentsSnapshot = await firestore().collection(this.collection)
+          .where('transactionId', '==', orderId)
+          .limit(1)
+          .get();
+        
+        if (!paymentsSnapshot.empty) {
+          actualPaymentId = paymentsSnapshot.docs[0].id;
+        } else {
+          throw new Error('Payment document not found for verification');
+        }
+      }
+
       if (verification.success) {
         // Update payment status to paid
-        await this.updatePaymentStatus(paymentId, PaymentStatus.PAID, {
+        await this.updatePaymentStatus(actualPaymentId, PaymentStatus.PAID, {
           paidAt: Timestamp.now(),
           transactionId: paymentId_razorpay,
           paymentMethod: PaymentMethod.ONLINE
@@ -223,12 +349,30 @@ export class PaymentService {
         return true;
       } else {
         // Update payment status to failed
-        await this.updatePaymentStatus(paymentId, PaymentStatus.FAILED);
+        await this.updatePaymentStatus(actualPaymentId, PaymentStatus.FAILED);
         return false;
       }
     } catch (error) {
       console.error('Error verifying payment:', error);
-      await this.updatePaymentStatus(paymentId, PaymentStatus.FAILED);
+      // Try to update the payment status to failed if we can find the payment
+      try {
+        let actualPaymentId = paymentId;
+        if (paymentId === 'current-month') {
+          const paymentsSnapshot = await firestore().collection(this.collection)
+            .where('transactionId', '==', orderId)
+            .limit(1)
+            .get();
+          
+          if (!paymentsSnapshot.empty) {
+            actualPaymentId = paymentsSnapshot.docs[0].id;
+            await this.updatePaymentStatus(actualPaymentId, PaymentStatus.FAILED);
+          }
+        } else {
+          await this.updatePaymentStatus(paymentId, PaymentStatus.FAILED);
+        }
+      } catch (updateError) {
+        console.error('Error updating payment status to failed:', updateError);
+      }
       throw new Error('Failed to verify payment');
     }
   }
@@ -236,9 +380,9 @@ export class PaymentService {
   /**
    * Get payment statistics for a tenant
    */
-  async getTenantPaymentStats(tenantId: string): Promise<PaymentStats> {
+  async getTenantPaymentStats(userId: string): Promise<PaymentStats> {
     try {
-      const payments = await this.getTenantPayments(tenantId);
+      const payments = await this.getTenantPayments(userId);
       
       const stats: PaymentStats = {
         totalPayments: payments.length,
@@ -419,13 +563,31 @@ export class PaymentService {
     }
   }
 
+  async getPropertyById(propertyId: string): Promise<any> {
+    try {
+      const doc = await firestore().collection('properties').doc(propertyId).get();
+      
+      if (!doc.exists) {
+        return null;
+      }
+      
+      return {
+        id: doc.id,
+        ...doc.data()
+      };
+    } catch (error) {
+      console.error('Error getting property by ID:', error);
+      throw new Error('Failed to get property');
+    }
+  }
+
   /**
    * Get tenant-based payment stats (using real rent amount from tenant collection)
    */
-  async getTenantBasedPaymentStats(tenantId: string): Promise<PaymentStats> {
+  async getTenantBasedPaymentStats(userId: string): Promise<PaymentStats> {
     try {
       // Get tenant data
-      const tenantData = await this.getTenantByUserId(tenantId);
+      const tenantData = await this.getTenantByUserId(userId);
       
       if (!tenantData) {
         return {
@@ -441,7 +603,7 @@ export class PaymentService {
       }
 
       // Get actual payments
-      const payments = await this.getTenantPayments(tenantId);
+      const payments = await this.getTenantPayments(userId);
       
       // Calculate stats based on tenant rent amount
       const monthlyRent = tenantData.rent || 0;

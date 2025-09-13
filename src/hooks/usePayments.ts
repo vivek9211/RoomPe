@@ -74,7 +74,7 @@ export const usePayments = () => {
         
         const virtualPayment: Payment = {
           id: 'current-month',
-          tenantId: userProfile.uid,
+          tenantId: tenantData.id, // Use actual tenant ID, not user ID
           propertyId: tenantData.propertyId,
           roomId: tenantData.roomId,
           amount: tenantData.rent,
