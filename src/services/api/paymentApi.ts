@@ -3,8 +3,12 @@
 // Replace BASE_URL and wire auth headers as per your backend.
 
 // TODO: move to a dedicated config (do not use process.env in React Native)
-// Replace with your computer's IP address when testing on device/emulator
-const BASE_URL = 'http://192.168.1.88:4000'; // Your computer's IP address
+// Replace with your deployed server URL for production
+// For development: use your computer's IP address when testing on device/emulator
+// For production: use your deployed server URL (e.g., https://your-app.herokuapp.com)
+const BASE_URL = __DEV__ 
+  ? 'http://192.168.1.88:4000' // Development - your computer's IP address
+  : 'https://room-c33zy0ulk-vivek-kumars-projects-888c40b7.vercel.app/'; // Production - replace with your actual deployed URL
 
 export interface CreateLinkedAccountInput {
   name: string;
