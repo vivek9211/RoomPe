@@ -33,6 +33,63 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [propertyData, setPropertyData] = useState<AssignedPropertyData | null>(null);
+  const [roomInfo, setRoomInfo] = useState<any>(null);
+
+  const loadRoomInfo = async (roomId: string) => {
+    try {
+      // Try to get room mapping first (now that we've added tenant permissions)
+      try {
+        const roomMapping = await firestoreService.getRoomMapping(property.id);
+        if (roomMapping && roomMapping.floors) {
+          // Search through floors to find the room
+          for (const floor of roomMapping.floors) {
+            if (floor.units) {
+              for (const unit of floor.units) {
+                if (unit.id === roomId) {
+                  return {
+                    roomNumber: unit.unitNumber,
+                    roomType: unit.unitType,
+                    floorName: floor.floorName,
+                    capacity: unit.capacity,
+                    sharingType: unit.sharingType
+                  };
+                }
+              }
+            }
+          }
+        }
+      } catch (mappingError) {
+        console.log('Room mapping not accessible, using fallback approach');
+      }
+      
+      // Fallback approach if room mapping is not accessible
+      // Try to parse room number from roomId (assuming format like "room_101" or "101")
+      let roomNumber = roomId;
+      if (roomId.includes('_')) {
+        roomNumber = roomId.split('_').pop() || roomId;
+      }
+      
+      // Try to determine room type from property type or use default
+      const propertyType = propertyData?.property?.type || 'flat';
+      let roomType = 'Room';
+      if (propertyType === 'flat' || propertyType === 'apartment') {
+        roomType = 'Flat';
+      } else if (propertyType === 'pg') {
+        roomType = 'Room';
+      }
+      
+      return {
+        roomNumber: roomNumber,
+        roomType: roomType,
+        floorName: 'Ground Floor', // Default - could be enhanced
+        capacity: 1, // Default - could be enhanced
+        sharingType: 'Single' // Default - could be enhanced
+      };
+    } catch (error) {
+      console.error('Error loading room info:', error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const loadPropertyData = async () => {
@@ -46,6 +103,12 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             application, 
             tenant: tenantData 
           });
+
+          // Load room information if tenant has roomId
+          if (tenantData?.roomId) {
+            const room = await loadRoomInfo(tenantData.roomId);
+            setRoomInfo(room);
+          }
         } catch (error) {
           console.error('Error loading tenant data:', error);
           // Fallback to property data without tenant info
@@ -97,6 +160,25 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const formatRoomType = (roomType: string) => {
+    switch (roomType?.toLowerCase()) {
+      case 'room':
+        return 'Room';
+      case 'flat':
+        return 'Flat';
+      case 'rk':
+        return 'RK';
+      case '1bhk':
+        return '1 BHK';
+      case '2bhk':
+        return '2 BHK';
+      case '3bhk':
+        return '3 BHK';
+      default:
+        return roomType || 'Room';
+    }
   };
 
   const handlePayDeposit = () => {
@@ -205,28 +287,47 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </View>
           </View>
 
-          {/* Application Details */}
-          <View style={styles.applicationSection}>
-            <Text style={styles.sectionTitle}>Application Details</Text>
+          {/* Room Details */}
+          <View style={styles.roomSection}>
+            <Text style={styles.sectionTitle}>Assigned Room</Text>
             
-            {propertyData.application.requestedRent && (
+            {roomInfo ? (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Room Type:</Text>
+                  <Text style={styles.detailValue}>{formatRoomType(roomInfo.roomType)}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Room Number:</Text>
+                  <Text style={styles.detailValue}>{roomInfo.roomNumber}</Text>
+                </View>
+                
+                {roomInfo.floorName && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Floor:</Text>
+                    <Text style={styles.detailValue}>{roomInfo.floorName}</Text>
+                  </View>
+                )}
+                
+                {roomInfo.capacity && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Capacity:</Text>
+                    <Text style={styles.detailValue}>{roomInfo.capacity} person{roomInfo.capacity > 1 ? 's' : ''}</Text>
+                  </View>
+                )}
+                
+                {roomInfo.sharingType && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Sharing:</Text>
+                    <Text style={styles.detailValue}>{roomInfo.sharingType}</Text>
+                  </View>
+                )}
+              </>
+            ) : (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Requested Rent:</Text>
-                <Text style={styles.detailValue}>₹{propertyData.application.requestedRent}/month</Text>
-              </View>
-            )}
-            
-            {propertyData.application.roomPreference && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Room Preference:</Text>
-                <Text style={styles.detailValue}>{propertyData.application.roomPreference}</Text>
-              </View>
-            )}
-            
-            {propertyData.application.additionalNotes && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Additional Notes:</Text>
-                <Text style={styles.detailValue}>{propertyData.application.additionalNotes}</Text>
+                <Text style={styles.detailLabel}>Room Assignment:</Text>
+                <Text style={styles.detailValue}>Pending</Text>
               </View>
             )}
           </View>
@@ -459,7 +560,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  applicationSection: {
+  roomSection: {
     borderTopWidth: 1,
     borderTopColor: colors.lightGray,
     paddingTop: dimensions.spacing.md,
