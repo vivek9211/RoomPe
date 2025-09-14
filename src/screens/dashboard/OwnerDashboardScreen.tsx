@@ -11,6 +11,8 @@ import {
   Animated,
   Dimensions,
   Platform,
+  TextInput,
+  FlatList,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,11 +21,32 @@ import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProperty } from '../../contexts/PropertyContext';
 import { Property } from '../../types/property.types';
+import { Tenant } from '../../types/tenant.types';
+import { Room } from '../../types/room.types';
 import { firestoreService } from '../../services/firestore';
+import { tenantApiService } from '../../services/api/tenantApi';
 
 interface OwnerDashboardScreenProps {
   navigation: any;
   route?: any;
+}
+
+interface SearchResult {
+  id: string;
+  type: 'tenant' | 'room';
+  title: string;
+  subtitle: string;
+  propertyName: string;
+  propertyId: string;
+  data: any;
+}
+
+interface TenantWithUser extends Tenant {
+  user?: {
+    name: string;
+    email: string;
+    phone: string;
+  };
 }
 
 const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation, route }) => {
@@ -31,6 +54,12 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
   const { selectedProperty, setSelectedProperty } = useProperty();
   const insets = useSafeAreaInsets();
   const [properties, setProperties] = useState<Property[]>([]);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   
   // Animation values for scroll effects
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -175,6 +204,141 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     return months[new Date().getMonth()];
   };
 
+  // Search functions
+  const searchTenantsAndRooms = async (query: string) => {
+    if (!query.trim() || !userProfile?.uid) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results: SearchResult[] = [];
+      const searchLower = query.toLowerCase().trim();
+
+      // Search tenants across all properties
+      for (const property of properties) {
+        try {
+          const tenants = await tenantApiService.getTenantsByProperty(property.id);
+          
+          for (const tenant of tenants) {
+            try {
+              // Get user details for tenant
+              const user = await firestoreService.getUserProfile(tenant.userId);
+              
+              if (user && (
+                user.name?.toLowerCase().includes(searchLower) ||
+                user.email?.toLowerCase().includes(searchLower) ||
+                user.phone?.toLowerCase().includes(searchLower) ||
+                tenant.roomId?.toLowerCase().includes(searchLower)
+              )) {
+                results.push({
+                  id: tenant.id,
+                  type: 'tenant',
+                  title: user.name || 'Unknown Tenant',
+                  subtitle: `Room ${tenant.roomId} • ${user.email || 'No Email'}`,
+                  propertyName: property.name,
+                  propertyId: property.id,
+                  data: { ...tenant, user }
+                });
+              }
+            } catch (error) {
+              console.error('Error fetching user for tenant:', error);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching tenants for property:', property.id, error);
+        }
+      }
+
+      // Search rooms across all properties
+      for (const property of properties) {
+        try {
+          // Get rooms for this property (assuming we have a way to get rooms)
+          // For now, we'll search by room number patterns
+          const roomNumbers = generateRoomNumbers(property);
+          
+          for (const roomNumber of roomNumbers) {
+            if (roomNumber.toLowerCase().includes(searchLower)) {
+              // Check if this room has tenants
+              const tenants = await tenantApiService.getTenantsByProperty(property.id);
+              const roomTenants = tenants.filter(t => t.roomId === roomNumber);
+              
+              results.push({
+                id: `${property.id}-${roomNumber}`,
+                type: 'room',
+                title: `Room ${roomNumber}`,
+                subtitle: `${roomTenants.length} tenant(s) • ${property.name}`,
+                propertyName: property.name,
+                propertyId: property.id,
+                data: { roomNumber, property, tenants: roomTenants }
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error searching rooms for property:', property.id, error);
+        }
+      }
+
+      setSearchResults(results);
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error('Error searching:', error);
+      Alert.alert('Search Error', 'Failed to search. Please try again.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Helper function to generate room numbers for search
+  const generateRoomNumbers = (property: Property): string[] => {
+    const roomNumbers: string[] = [];
+    
+    // Generate room numbers based on property type and total rooms
+    for (let i = 1; i <= property.totalRooms; i++) {
+      // Format room numbers (e.g., 101, 102, 201, 202, etc.)
+      const floor = Math.floor((i - 1) / 10) + 1;
+      const room = ((i - 1) % 10) + 1;
+      roomNumbers.push(`${floor}${room.toString().padStart(2, '0')}`);
+    }
+    
+    return roomNumbers;
+  };
+
+  const handleSearchQueryChange = (text: string) => {
+    setSearchQuery(text);
+    
+    // Debounce search
+    const timeoutId = setTimeout(() => {
+      searchTenantsAndRooms(text);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  };
+
+  const handleSearchResultPress = (result: SearchResult) => {
+    setShowSearchResults(false);
+    setSearchQuery('');
+    
+    if (result.type === 'tenant') {
+      // Navigate to tenant details
+      navigation.navigate('TenantDetails', { tenantId: result.id });
+    } else if (result.type === 'room') {
+      // Navigate to room management or room details
+      navigation.navigate('RoomManagement', { 
+        propertyId: result.propertyId,
+        roomNumber: result.data.roomNumber 
+      });
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+  };
+
      return (
      <SafeAreaView style={styles.container}>
       <StatusBar
@@ -204,10 +368,75 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <Text style={styles.searchPlaceholder}>Search Tenants, Rooms ...</Text>
+          <Icon name="search-outline" size={20} color={colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search Tenants, Rooms ..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={handleSearchQueryChange}
+            onFocus={() => setShowSearchResults(true)}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+              <Icon name="close-circle" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
+
+      {/* Search Results */}
+      {showSearchResults && (
+        <View style={styles.searchResultsContainer}>
+          <View style={styles.searchResultsHeader}>
+            <Text style={styles.searchResultsTitle}>
+              {isSearching ? 'Searching...' : `Search Results (${searchResults.length})`}
+            </Text>
+            <TouchableOpacity onPress={() => setShowSearchResults(false)}>
+              <Icon name="close" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          
+          {searchResults.length > 0 ? (
+            <FlatList
+              data={searchResults}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.searchResultItem}
+                  onPress={() => handleSearchResultPress(item)}
+                >
+                  <View style={styles.searchResultIcon}>
+                    <Icon 
+                      name={item.type === 'tenant' ? 'person-outline' : 'home-outline'} 
+                      size={24} 
+                      color={colors.primary} 
+                    />
+                  </View>
+                  <View style={styles.searchResultContent}>
+                    <Text style={styles.searchResultTitle}>{item.title}</Text>
+                    <Text style={styles.searchResultSubtitle}>{item.subtitle}</Text>
+                    <Text style={styles.searchResultProperty}>{item.propertyName}</Text>
+                  </View>
+                  <Icon name="chevron-forward" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+              style={styles.searchResultsList}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : !isSearching && searchQuery.length > 0 ? (
+            <View style={styles.noSearchResults}>
+              <Icon name="search-outline" size={48} color={colors.textMuted} />
+              <Text style={styles.noSearchResultsText}>No results found</Text>
+              <Text style={styles.noSearchResultsSubtext}>
+                Try searching for tenant names, room numbers, or emails
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      )}
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* No Property Selected Message */}
@@ -555,13 +784,15 @@ const styles = StyleSheet.create({
      height: 44,
    },
   searchIcon: {
-    fontSize: 20,
     marginRight: dimensions.spacing.sm,
   },
-  searchPlaceholder: {
+  searchInput: {
     flex: 1,
     fontSize: fonts.md,
-    color: colors.textMuted,
+    color: colors.textPrimary,
+  },
+  clearButton: {
+    padding: dimensions.spacing.xs,
   },
   content: {
     flex: 1,
@@ -757,6 +988,86 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fonts.md,
     fontWeight: '500',
+  },
+  // Search Results Styles
+  searchResultsContainer: {
+    backgroundColor: colors.white,
+    marginHorizontal: dimensions.spacing.lg,
+    marginBottom: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.lg,
+    maxHeight: 400,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchResultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: dimensions.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  searchResultsTitle: {
+    fontSize: fonts.md,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  searchResultsList: {
+    maxHeight: 300,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: dimensions.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  searchResultIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.lightGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: dimensions.spacing.md,
+  },
+  searchResultContent: {
+    flex: 1,
+  },
+  searchResultTitle: {
+    fontSize: fonts.md,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.xs,
+  },
+  searchResultSubtitle: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+    marginBottom: dimensions.spacing.xs,
+  },
+  searchResultProperty: {
+    fontSize: fonts.xs,
+    color: colors.textMuted,
+  },
+  noSearchResults: {
+    padding: dimensions.spacing.xl,
+    alignItems: 'center',
+  },
+  noSearchResultsText: {
+    fontSize: fonts.md,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: dimensions.spacing.md,
+    marginBottom: dimensions.spacing.sm,
+  },
+  noSearchResultsSubtext: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 
