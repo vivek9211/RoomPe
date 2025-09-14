@@ -12,6 +12,14 @@ import { colors, fonts, dimensions } from '../../constants';
 import { usePayments } from '../../hooks/usePayments';
 import { PaymentStatus } from '../../types/payment.types';
 
+// Local formatting functions
+const formatCurrency = (amount: number): string => {
+  if (typeof amount !== 'number' || isNaN(amount)) {
+    return '₹0';
+  }
+  return `₹${amount.toLocaleString('en-IN')}`;
+};
+
 const PaymentListScreen: React.FC = () => {
   const { 
     loading, 
@@ -139,7 +147,7 @@ const PaymentListScreen: React.FC = () => {
               {payments.map((payment) => (
                 <View key={payment.id} style={styles.paymentItem}>
                   <View style={styles.paymentHeader}>
-                    <Text style={styles.paymentAmount}>₹{payment.amount}</Text>
+                    <Text style={styles.paymentAmount}>{formatCurrency(payment.amount)}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
                       <Text style={styles.statusText}>{getStatusText(payment.status)}</Text>
                     </View>
@@ -172,7 +180,7 @@ const PaymentListScreen: React.FC = () => {
               {pendingPayments.map((payment) => (
                 <View key={payment.id} style={styles.paymentItem}>
                   <View style={styles.paymentHeader}>
-                    <Text style={styles.paymentAmount}>₹{payment.amount}</Text>
+                    <Text style={styles.paymentAmount}>{formatCurrency(payment.amount)}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
                       <Text style={styles.statusText}>{getStatusText(payment.status)}</Text>
                     </View>

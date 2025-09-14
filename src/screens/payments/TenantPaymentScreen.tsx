@@ -282,14 +282,14 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
         <View style={styles.paymentDetails}>
           <View style={styles.amountRow}>
             <Text style={styles.amountLabel}>Amount:</Text>
-            <Text style={styles.amountValue}>₹{formatCurrency(payment.amount)}</Text>
+            <Text style={styles.amountValue}>{formatCurrency(payment.amount)}</Text>
           </View>
           
           {payment.lateFee && payment.lateFee > 0 && (
             <View style={styles.amountRow}>
               <Text style={styles.amountLabel}>Late Fee:</Text>
               <Text style={[styles.amountValue, { color: colors.error }]}>
-                ₹{formatCurrency(payment.lateFee)}
+                {formatCurrency(payment.lateFee)}
               </Text>
             </View>
           )}
@@ -360,7 +360,7 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
                 </View>
               </View>
               <Text style={styles.currentAmount}>
-                ₹{formatCurrency(currentMonthRent.amount + (currentMonthRent.lateFee || 0))}
+                {formatCurrency(currentMonthRent.amount + (currentMonthRent.lateFee || 0))}
               </Text>
               {currentMonthRent.status === PaymentStatus.PENDING || currentMonthRent.status === PaymentStatus.OVERDUE ? (
                 <TouchableOpacity
@@ -385,24 +385,24 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
             <Text style={styles.sectionTitle}>Payment Summary</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>₹{formatCurrency(paymentStats.totalAmount)}</Text>
+                <Text style={styles.statValue}>{formatCurrency(paymentStats.totalAmount)}</Text>
                 <Text style={styles.statLabel}>Total Amount</Text>
               </View>
               <View style={styles.statCard}>
                 <Text style={[styles.statValue, { color: colors.success }]}>
-                  ₹{formatCurrency(paymentStats.paidAmount)}
+                  {formatCurrency(paymentStats.paidAmount)}
                 </Text>
                 <Text style={styles.statLabel}>Paid</Text>
               </View>
               <View style={styles.statCard}>
                 <Text style={[styles.statValue, { color: colors.warning }]}>
-                  ₹{formatCurrency(paymentStats.pendingAmount)}
+                  {formatCurrency(paymentStats.pendingAmount)}
                 </Text>
                 <Text style={styles.statLabel}>Pending</Text>
               </View>
               <View style={styles.statCard}>
                 <Text style={[styles.statValue, { color: colors.error }]}>
-                  ₹{formatCurrency(paymentStats.overdueAmount)}
+                  {formatCurrency(paymentStats.overdueAmount)}
                 </Text>
                 <Text style={styles.statLabel}>Overdue</Text>
               </View>
@@ -415,7 +415,7 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
           <View style={styles.outstandingSection}>
             <View style={styles.outstandingCard}>
               <Text style={styles.outstandingTitle}>Total Outstanding</Text>
-              <Text style={styles.outstandingAmount}>₹{formatCurrency(totalOutstanding)}</Text>
+              <Text style={styles.outstandingAmount}>{formatCurrency(totalOutstanding)}</Text>
               <Text style={styles.outstandingSubtitle}>
                 {overduePayments.length > 0 
                   ? `${overduePayments.length} payment(s) overdue`
