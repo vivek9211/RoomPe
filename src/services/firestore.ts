@@ -1219,20 +1219,5 @@ class FirestoreService {
 // Export singleton instance
 export const firestoreService = new FirestoreService();
 
-// Debug function to test Firestore connection
-export const testFirestoreConnection = async () => {
-  try {
-    console.log('Testing Firestore connection...');
-    
-    // Test Firestore connection by trying to access a collection
-    const testCollection = firestore().collection('test');
-    console.log('Firestore collection access successful');
-    
-    return true;
-  } catch (error: any) {
-    console.error('Firestore connection test failed:', error);
-    return false;
-  }
-};
 
 export default firestoreService;

@@ -329,27 +329,5 @@ class FirebaseAuthService {
 
 export const firebaseAuthService = new FirebaseAuthService();
 
-// Debug function to test Firebase Auth connection
-export const testFirebaseAuthConnection = async () => {
-  try {
-    console.log('Testing Firebase Auth connection...');
-    
-    if (!firebaseAuthService.isFirebaseInitialized()) {
-      console.error('Firebase Auth is not initialized');
-      return false;
-    }
-    
-    console.log('Firebase Auth is initialized');
-    
-    // Test Firebase Auth connection by trying to access current user
-    const currentUser = auth().currentUser;
-    console.log('Firebase Auth access successful');
-    
-    return true;
-  } catch (error: any) {
-    console.error('Firebase Auth connection test failed:', error);
-    return false;
-  }
-};
 
 export default firebaseAuthService;

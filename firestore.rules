@@ -77,6 +77,16 @@ service cloud.firestore {
       allow read: if request.auth != null && 
         (resource.data.userId == request.auth.uid ||
          userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to update their own tenant records (for deposit status, etc.)
+      allow update: if request.auth != null && 
+        (resource.data.userId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to create their own tenant records
+      allow create: if request.auth != null && 
+        (request.resource.data.userId == request.auth.uid ||
+         userOwnsProperty(request.resource.data.propertyId));
     }
 
     // Rentals collection rules
@@ -183,13 +193,5 @@ service cloud.firestore {
       // Allow listing for authenticated users (simplified for now)
       allow list: if request.auth != null;
     }
-
-
-
-
-
-
-
-
   }
 }

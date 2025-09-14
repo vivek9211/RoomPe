@@ -90,6 +90,8 @@ export interface CreateOrderWithTransfersInput {
   propertyId: string;
   amount: number; // rupees
   currency?: 'INR';
+  landlordLinkedAccountId?: string;
+  platformFeePercent?: number;
 }
 
 export interface CreateOrderWithTransfersResponse {
@@ -117,13 +119,31 @@ export interface VerifyPaymentInput {
 }
 
 export async function verifyPaymentSignature(input: VerifyPaymentInput) {
-  const res = await fetch(`${BASE_URL}/payments/route/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input)
-  });
-  if (!res.ok) throw new Error('Signature verification failed');
-  return (await res.json()) as { success: boolean };
+  try {
+    const res = await fetch(`${BASE_URL}/payments/route/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      console.error('Verification failed:', {
+        status: res.status,
+        statusText: res.statusText,
+        errorData,
+        input
+      });
+      throw new Error(`Signature verification failed: ${res.status} ${res.statusText} - ${errorData.error || 'Unknown error'}`);
+    }
+    
+    const result = await res.json();
+    console.log('Verification result:', result);
+    return result as { success: boolean };
+  } catch (error: any) {
+    console.error('Verification error:', error);
+    throw error;
+  }
 }
 
 export async function getRouteAccountStatus(accountId: string) {

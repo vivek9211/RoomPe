@@ -270,7 +270,6 @@ class ImageService {
     }
   }
 
-  // Removed testStorageUpload used during debugging
 
   /**
    * Attempt upload to basePath; if it fails, retry with a simplified unique fallback path.

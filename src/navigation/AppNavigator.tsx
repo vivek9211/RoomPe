@@ -54,6 +54,7 @@ import PaymentListScreen from '../screens/payments/PaymentListScreen';
 import PaymentDetailScreen from '../screens/payments/PaymentDetailScreen';
 import AddPaymentScreen from '../screens/payments/AddPaymentScreen';
 import TenantPaymentScreen from '../screens/payments/TenantPaymentScreen';
+import DepositPaymentScreen from '../screens/payments/DepositPaymentScreen';
 
 // Maintenance Screens
 import MaintenanceListScreen from '../screens/maintenance/MaintenanceListScreen';
@@ -281,6 +282,7 @@ const AppNavigator = () => {
             <Stack.Screen name="TenantTabs" component={TenantTabNavigator} />
             <Stack.Screen name="AssignedPropertyDetail" component={AssignedPropertyDetailScreen} />
             <Stack.Screen name="TenantPayments" component={TenantPaymentScreen} />
+            <Stack.Screen name="DepositPayment" component={DepositPaymentScreen} />
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />

@@ -99,6 +99,22 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
     });
   };
 
+  const handlePayDeposit = () => {
+    if (propertyData.tenant?.depositPaid) {
+      Alert.alert(
+        'Deposit Already Paid',
+        'Your security deposit has already been paid.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    navigation.navigate('DepositPayment', {
+      property: propertyData.property,
+      tenant: propertyData.tenant,
+    });
+  };
+
   const handleContactOwner = () => {
     Alert.alert(
       'Contact Owner',
@@ -262,8 +278,18 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
               <Text style={styles.actionButtonSubtext}>View rent & payments</Text>
             </TouchableOpacity>
             
+            {!propertyData.tenant?.depositPaid && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.warningButton]}
+                onPress={handlePayDeposit}
+              >
+                <Text style={styles.actionButtonText}>💳 Pay Deposit</Text>
+                <Text style={styles.actionButtonSubtext}>Pay security deposit</Text>
+              </TouchableOpacity>
+            )}
+            
             <TouchableOpacity
-              style={[styles.actionButton, styles.warningButton]}
+              style={[styles.actionButton, styles.infoButton]}
               onPress={handleReportIssue}
             >
               <Text style={styles.actionButtonText}>🔧 Report Issue</Text>
@@ -271,7 +297,7 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.infoButton]}
+              style={[styles.actionButton, styles.secondaryButton]}
               onPress={handleViewMaintenance}
             >
               <Text style={styles.actionButtonText}>📋 Maintenance</Text>
@@ -279,7 +305,7 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.secondaryButton]}
+              style={[styles.actionButton, styles.editButton]}
               onPress={handleContactOwner}
             >
               <Text style={styles.actionButtonText}>📞 Contact Owner</Text>
@@ -287,7 +313,7 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.editButton]}
+              style={[styles.actionButton, styles.grayButton]}
               onPress={handleViewDocuments}
             >
               <Text style={styles.actionButtonText}>📄 Documents</Text>
@@ -522,6 +548,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning,
   },
   editButton: {
+    backgroundColor: colors.gray,
+  },
+  grayButton: {
     backgroundColor: colors.gray,
   },
   actionButtonText: {
