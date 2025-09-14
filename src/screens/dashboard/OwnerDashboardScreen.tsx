@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProperty } from '../../contexts/PropertyContext';
@@ -194,8 +195,8 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
          </View>
          
          <View style={styles.actionIcons}>
-           <TouchableOpacity style={styles.notificationIcon}>
-             <Text style={styles.iconText}>🔔</Text>
+           <TouchableOpacity style={styles.notificationIcon} onPress={() => navigation.navigate('Notifications')}>
+             <Icon name="notifications-outline" size={20} color={colors.white} />
            </TouchableOpacity>
          </View>
        </View>
@@ -277,7 +278,7 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.quickActionsScrollContainer}
-            snapToInterval={80 + dimensions.spacing.md}
+            snapToInterval={100 + dimensions.spacing.md}
             decelerationRate="fast"
             onScroll={Animated.event(
               [{ nativeEvent: { contentOffset: { x: scrollY } } }],
@@ -285,130 +286,137 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
             )}
             scrollEventThrottle={16}
             bounces={true}
-            alwaysBounceHorizontal={false}
+            alwaysBounceHorizontal={true}
+            pagingEnabled={false}
           >
-                         <Animated.View
-               style={{
-                 transform: [{
-                   scale: scrollY.interpolate({
-                     inputRange: [0, 80],
-                     outputRange: [1, 1.05],
-                     extrapolate: 'clamp',
-                   }),
-                 }],
-               }}
-             >
+            {/* Add Tenant */}
+            <Animated.View
+              style={{
+                transform: [{
+                  scale: scrollY.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: [1, 1.05],
+                    extrapolate: 'clamp',
+                  }),
+                }],
+              }}
+            >
               <TouchableOpacity
                 style={styles.quickActionButton}
                 onPress={() => handleQuickAction('addTenant')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionIcon}>👥</Text>
+                <Icon name="person-add-outline" size={24} color={colors.primary} />
                 <Text style={styles.actionLabel}>Add Tenant</Text>
               </TouchableOpacity>
             </Animated.View>
             
-                         <Animated.View
-               style={{
-                 transform: [{
-                   scale: scrollY.interpolate({
-                     inputRange: [80, 160],
-                     outputRange: [1, 1.05],
-                     extrapolate: 'clamp',
-                   }),
-                 }],
-               }}
-             >
+            {/* Applications */}
+            <Animated.View
+              style={{
+                transform: [{
+                  scale: scrollY.interpolate({
+                    inputRange: [100, 200],
+                    outputRange: [1, 1.05],
+                    extrapolate: 'clamp',
+                  }),
+                }],
+              }}
+            >
               <TouchableOpacity
                 style={styles.quickActionButton}
                 onPress={() => handleQuickAction('viewApplications')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionIcon}>📋</Text>
+                <Icon name="document-text-outline" size={24} color={colors.primary} />
                 <Text style={styles.actionLabel}>Applications</Text>
               </TouchableOpacity>
             </Animated.View>
             
-                         <Animated.View
-               style={{
-                 transform: [{
-                   scale: scrollY.interpolate({
-                     inputRange: [160, 240],
-                     outputRange: [1, 1.05],
-                     extrapolate: 'clamp',
-                   }),
-                 }],
-               }}
-             >
+            {/* Receive Payment */}
+            <Animated.View
+              style={{
+                transform: [{
+                  scale: scrollY.interpolate({
+                    inputRange: [200, 300],
+                    outputRange: [1, 1.05],
+                    extrapolate: 'clamp',
+                  }),
+                }],
+              }}
+            >
               <TouchableOpacity
                 style={styles.quickActionButton}
                 onPress={() => handleQuickAction('receivePayment')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionIcon}>💱</Text>
+                <Icon name="card-outline" size={24} color={colors.primary} />
                 <Text style={styles.actionLabel}>Receive Payment</Text>
               </TouchableOpacity>
             </Animated.View>
             
-                         <Animated.View
-               style={{
-                 transform: [{
-                   scale: scrollY.interpolate({
-                     inputRange: [160, 240],
-                     outputRange: [1, 1.05],
-                     extrapolate: 'clamp',
-                   }),
-                 }],
-               }}
-             >
+            {/* Add Dues */}
+            <Animated.View
+              style={{
+                transform: [{
+                  scale: scrollY.interpolate({
+                    inputRange: [300, 400],
+                    outputRange: [1, 1.05],
+                    extrapolate: 'clamp',
+                  }),
+                }],
+              }}
+            >
               <TouchableOpacity
                 style={styles.quickActionButton}
                 onPress={() => handleQuickAction('addDues')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionIcon}>💰</Text>
+                <Icon name="wallet-outline" size={24} color={colors.primary} />
                 <Text style={styles.actionLabel}>Add Dues</Text>
               </TouchableOpacity>
             </Animated.View>
             
-                         <Animated.View
-               style={{
-                 transform: [{
-                   scale: scrollY.interpolate({
-                     inputRange: [240, 320],
-                     outputRange: [1, 1.05],
-                     extrapolate: 'clamp',
-                   }),
-                 }],
-               }}
-             >
+            {/* Add Expense */}
+            <Animated.View
+              style={{
+                transform: [{
+                  scale: scrollY.interpolate({
+                    inputRange: [400, 500],
+                    outputRange: [1, 1.05],
+                    extrapolate: 'clamp',
+                  }),
+                }],
+              }}
+            >
               <TouchableOpacity
                 style={styles.quickActionButton}
                 onPress={() => handleQuickAction('addExpense')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionIcon}>📄</Text>
+                <Icon name="receipt-outline" size={24} color={colors.primary} />
                 <Text style={styles.actionLabel}>Add Expense</Text>
               </TouchableOpacity>
             </Animated.View>
             
-                         <Animated.View
-               style={{
-                 transform: [{
-                   scale: scrollY.interpolate({
-                     inputRange: [320, 400],
-                     outputRange: [1, 1.05],
-                     extrapolate: 'clamp',
-                   }),
-                 }],
-               }}
-             >
+            {/* Send Announcement */}
+            <Animated.View
+              style={{
+                transform: [{
+                  scale: scrollY.interpolate({
+                    inputRange: [500, 600],
+                    outputRange: [1, 1.05],
+                    extrapolate: 'clamp',
+                  }),
+                }],
+              }}
+            >
               <TouchableOpacity
                 style={styles.quickActionButton}
                 onPress={() => handleQuickAction('sendAnnouncement')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.actionIcon}>📢</Text>
+                <Icon name="megaphone-outline" size={24} color={colors.primary} />
                 <Text style={styles.actionLabel}>Send Announcement</Text>
               </TouchableOpacity>
             </Animated.View>
@@ -423,14 +431,14 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
                   style={[
                     styles.scrollDot,
                     {
-                                             backgroundColor: scrollY.interpolate({
-                         inputRange: [
-                           index * 80,
-                           (index + 1) * 80,
-                         ],
-                         outputRange: [colors.textMuted, colors.primary],
-                         extrapolate: 'clamp',
-                       }),
+                      backgroundColor: scrollY.interpolate({
+                        inputRange: [
+                          index * 100,
+                          (index + 1) * 100,
+                        ],
+                        outputRange: [colors.textMuted, colors.primary],
+                        extrapolate: 'clamp',
+                      }),
                     },
                   ]}
                 />
@@ -626,23 +634,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: dimensions.spacing.lg,
     paddingVertical: dimensions.spacing.sm,
   },
-     quickActionButton: {
-     width: 80,
-     minWidth: 80,
-     backgroundColor: colors.white,
-     padding: dimensions.spacing.md,
-     borderRadius: dimensions.borderRadius.lg,
-     alignItems: 'center',
-     marginRight: dimensions.spacing.md,
-   },
+  quickActionButton: {
+    width: 100,
+    minWidth: 100,
+    backgroundColor: colors.white,
+    padding: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.lg,
+    alignItems: 'center',
+    marginRight: dimensions.spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   actionIcon: {
     fontSize: 24,
     marginBottom: dimensions.spacing.xs,
   },
   actionLabel: {
     fontSize: fonts.sm,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     textAlign: 'center',
+    fontWeight: '500',
   },
   reportsSection: {
     marginBottom: dimensions.spacing.xl,
