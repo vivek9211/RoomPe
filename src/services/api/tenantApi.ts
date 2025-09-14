@@ -94,6 +94,33 @@ class TenantApiService {
   }
 
   /**
+   * Get tenant by user ID
+   * @param userId - User ID
+   * @returns Tenant data or null if not found
+   */
+  async getTenantByUserId(userId: string): Promise<Tenant | null> {
+    try {
+      const snapshot = await this.tenantsCollection
+        .where('userId', '==', userId)
+        .limit(1)
+        .get();
+      
+      if (snapshot.empty) {
+        return null;
+      }
+      
+      const doc = snapshot.docs[0];
+      return {
+        id: doc.id,
+        ...doc.data(),
+      } as Tenant;
+    } catch (error) {
+      console.error('Error fetching tenant by user ID:', error);
+      throw new Error('Failed to fetch tenant');
+    }
+  }
+
+  /**
    * Get tenants by room ID
    * @param roomId - Room ID
    * @returns Array of tenants for the room

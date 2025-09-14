@@ -12,8 +12,10 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { Property } from '../../types/property.types';
-import { TenantApplication } from '../../types/tenant.types';
+import { TenantApplication, Tenant } from '../../types/tenant.types';
 import { firestoreService } from '../../services/firestore';
+import { useAuth } from '../../contexts/AuthContext';
+import { tenantApiService } from '../../services/api/tenantApi';
 
 interface AssignedPropertyDetailScreenProps {
   navigation: any;
@@ -23,18 +25,41 @@ interface AssignedPropertyDetailScreenProps {
 interface AssignedPropertyData {
   application: TenantApplication;
   property: Property;
+  tenant?: Tenant;
 }
 
 const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> = ({ navigation, route }) => {
   const { property, application } = route.params || {};
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [propertyData, setPropertyData] = useState<AssignedPropertyData | null>(null);
 
   useEffect(() => {
-    if (property && application) {
-      setPropertyData({ property, application });
-    }
-  }, [property, application]);
+    const loadPropertyData = async () => {
+      if (property && application && user) {
+        setLoading(true);
+        try {
+          // Fetch tenant data for the current user
+          const tenantData = await tenantApiService.getTenantByUserId(user.uid);
+          setPropertyData({ 
+            property, 
+            application, 
+            tenant: tenantData 
+          });
+        } catch (error) {
+          console.error('Error loading tenant data:', error);
+          // Fallback to property data without tenant info
+          setPropertyData({ property, application });
+        } finally {
+          setLoading(false);
+        }
+      } else if (property && application) {
+        setPropertyData({ property, application });
+      }
+    };
+
+    loadPropertyData();
+  }, [property, application, user]);
 
   if (!propertyData) {
     return (
@@ -195,12 +220,16 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             <View style={styles.pricingSection}>
               <Text style={styles.sectionTitle}>Property Pricing</Text>
               <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Base Rent:</Text>
-                <Text style={styles.pricingValue}>₹{propertyData.property.pricing.baseRent || 0}/month</Text>
+                <Text style={styles.pricingLabel}>Tenant Rent:</Text>
+                <Text style={styles.pricingValue}>
+                  ₹{propertyData.tenant?.rent || propertyData.property.pricing.baseRent || 0}/month
+                </Text>
               </View>
               <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Deposit:</Text>
-                <Text style={styles.pricingValue}>₹{propertyData.property.pricing.deposit || 0}</Text>
+                <Text style={styles.pricingLabel}>Tenant Deposit:</Text>
+                <Text style={styles.pricingValue}>
+                  ₹{propertyData.tenant?.deposit || propertyData.property.pricing.deposit || 0}
+                </Text>
               </View>
               {propertyData.property.pricing.utilities && (
                 <View style={styles.pricingRow}>
