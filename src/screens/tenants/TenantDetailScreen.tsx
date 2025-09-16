@@ -9,13 +9,16 @@ import {
   Alert,
   StatusBar,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { Tenant, TenantStatus } from '../../types/tenant.types';
+import { Payment, PaymentStatus, PaymentType } from '../../types/payment.types';
 import { useTenants } from '../../hooks/useTenants';
 import { tenantApiService } from '../../services/api/tenantApi';
 import { firestoreService } from '../../services/firestore';
+import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface TenantDetailScreenProps {
@@ -31,6 +34,9 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
   const [tenant, setTenant] = useState<Tenant | null>(tenantFromParams || null);
   const [userDetails, setUserDetails] = useState<any>(null);
   const [propertyDetails, setPropertyDetails] = useState<any>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
+  const [paymentsModalVisible, setPaymentsModalVisible] = useState<boolean>(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -38,6 +44,9 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
         if (tenantFromParams) {
           setTenant(tenantFromParams);
           await loadRelatedDetails(tenantFromParams);
+          if (tenantFromParams.id) {
+            await loadPayments(tenantFromParams.id as any);
+          }
           return;
         }
         if (tenantId) {
@@ -54,6 +63,7 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
       if (data) {
         setTenant(data);
         await loadRelatedDetails(data);
+        await loadPayments(data.id);
       }
     } catch (error) {
       console.error('Error loading tenant details:', error);
@@ -75,6 +85,70 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
     } catch (e) {
       console.error('Error loading related tenant details:', e);
     }
+  };
+
+  const loadPayments = async (tenantDocId: string) => {
+    try {
+      const snap = await firestore()
+        .collection('payments')
+        .where('tenantId', '==', tenantDocId)
+        .get();
+
+      const list: any[] = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      list.sort((a: any, b: any) => (b.createdAt?.toDate?.()?.getTime?.() || 0) - (a.createdAt?.toDate?.()?.getTime?.() || 0));
+      setPayments(list as Payment[]);
+    } catch (e) {
+      console.error('Error loading payments:', e);
+      setPayments([]);
+    }
+  };
+
+  const filteredPayments = payments.filter((p) => {
+    if (paymentFilter === 'all') return true;
+    const status = (p.status as any) as string;
+    return status?.toLowerCase() === paymentFilter;
+  });
+
+  const renderPaymentsList = () => (
+    <>
+      <View style={styles.filtersRow}>
+        {(['all','paid','pending','overdue'] as const).map((key) => (
+          <TouchableOpacity
+            key={key}
+            style={[styles.filterChip, paymentFilter === key && styles.filterChipActive]}
+            onPress={() => setPaymentFilter(key)}
+          >
+            <Text style={[styles.filterChipText, paymentFilter === key && styles.filterChipTextActive]}>
+              {key.charAt(0).toUpperCase() + key.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {filteredPayments.length === 0 ? (
+        <Text style={{ color: colors.textSecondary }}>No payments found for this filter.</Text>
+      ) : (
+        filteredPayments.map((p) => (
+          <View key={p.id} style={styles.paymentRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.paymentTitle}>{p.type === PaymentType.RENT ? `Rent - ${p.month}` : 'Deposit'}</Text>
+              <Text style={styles.paymentSub}>Due: {p.dueDate?.toDate?.()?.toLocaleDateString?.() || '-'}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.paymentAmountInline}>₹{p.amount.toLocaleString('en-IN')}</Text>
+              <View style={[styles.smallBadge, { backgroundColor: p.status === PaymentStatus.PAID ? colors.success : (p.status === PaymentStatus.OVERDUE ? colors.error : colors.warning) }]}>
+                <Text style={styles.smallBadgeText}>{(p.status as any)?.toLowerCase?.()}</Text>
+              </View>
+            </View>
+          </View>
+        ))
+      )}
+    </>
+  );
+
+  const getCurrentMonthPayment = (): Payment | undefined => {
+    const currentMonth = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+    const monthPayments = payments.filter((p) => p.type === PaymentType.RENT && p.month === (currentMonth as any));
+    return monthPayments.find((p) => p.status === PaymentStatus.PAID) || monthPayments[0];
   };
 
   const getStatusColor = (status: TenantStatus) => {
@@ -216,33 +290,34 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Status Card */}
+        {/* Payment Overview */}
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
-            <Text style={styles.statusTitle}>Current Status</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(tenant.status) }]}>
-              <Text style={styles.statusText}>{getStatusText(tenant.status)}</Text>
-            </View>
+            <Text style={styles.statusTitle}>Payment Overview</Text>
           </View>
-          <View style={styles.statusActions}>
-            <TouchableOpacity 
-              style={[styles.statusButton, { backgroundColor: colors.success }]}
-              onPress={() => handleStatusChange(TenantStatus.ACTIVE)}
-            >
-              <Text style={styles.statusButtonText}>Activate</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.statusButton, { backgroundColor: colors.warning }]}
-              onPress={() => handleStatusChange(TenantStatus.PENDING)}
-            >
-              <Text style={styles.statusButtonText}>Pending</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.statusButton, { backgroundColor: colors.error }]}
-              onPress={() => handleStatusChange(TenantStatus.LEFT)}
-            >
-              <Text style={styles.statusButtonText}>Mark Left</Text>
-            </TouchableOpacity>
+          <View style={styles.paymentGrid}>
+            <View style={[styles.paymentCard, { borderLeftColor: colors.primary }]}>
+              <Text style={styles.paymentLabel}>Monthly Rent</Text>
+              <Text style={styles.paymentAmount}>₹{(tenant.rent || 0).toLocaleString('en-IN')}</Text>
+              {(() => {
+                const p = getCurrentMonthPayment();
+                const status = p?.status || PaymentStatus.PENDING;
+                const bg = status === PaymentStatus.PAID ? colors.success : (status === PaymentStatus.OVERDUE ? colors.error : colors.warning);
+                const text = status === PaymentStatus.PAID ? 'Paid' : (status === PaymentStatus.OVERDUE ? 'Overdue' : 'Pending');
+                return (
+                  <View style={[styles.smallBadge, { backgroundColor: bg }]}>
+                    <Text style={styles.smallBadgeText}>{text}</Text>
+                  </View>
+                );
+              })()}
+            </View>
+            <View style={[styles.paymentCard, { borderLeftColor: colors.success }]}>
+              <Text style={styles.paymentLabel}>Security Deposit</Text>
+              <Text style={styles.paymentAmount}>₹{(tenant.deposit || 0).toLocaleString('en-IN')}</Text>
+              <View style={[styles.smallBadge, { backgroundColor: tenant.depositPaid ? colors.success : colors.error }]}>
+                <Text style={styles.smallBadgeText}>{tenant.depositPaid ? 'Paid' : 'Not Paid'}</Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -350,6 +425,21 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
           </View>
         )}
 
+        {/* Payments section - list only in modal */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Payments</Text>
+            <TouchableOpacity
+              onPress={() => setPaymentsModalVisible(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.openButton}
+            >
+              <Text style={styles.openButtonText}>View All</Text>
+              <Text style={styles.openButtonIcon}>›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Notes */}
         {tenant.metadata?.notes && (
           <View style={styles.section}>
@@ -373,6 +463,32 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
           </View>
         </View>
       </ScrollView>
+
+      {/* Payments Modal */}
+      <Modal
+        transparent
+        visible={paymentsModalVisible}
+        animationType="slide"
+        onRequestClose={() => setPaymentsModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Payments</Text>
+              <TouchableOpacity
+                onPress={() => setPaymentsModalVisible(false)}
+                style={styles.openButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.openButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {renderPaymentsList()}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Error Message */}
       {error && (
@@ -510,6 +626,95 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: dimensions.spacing.sm,
   },
+  paymentGrid: {
+    flexDirection: 'row',
+    gap: dimensions.spacing.sm,
+  },
+  paymentCard: {
+    flex: 1,
+    backgroundColor: colors.white,
+    padding: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.md,
+    borderLeftWidth: 4,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  paymentLabel: {
+    fontSize: fonts.xs,
+    color: colors.textSecondary,
+  },
+  paymentAmount: {
+    fontSize: fonts.md,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  smallBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  smallBadgeText: {
+    color: colors.white,
+    fontSize: fonts.xs,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  filtersRow: {
+    flexDirection: 'row',
+    gap: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.md,
+  },
+  filterChip: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
+    borderColor: colors.primary,
+  },
+  filterChipText: {
+    color: colors.textSecondary,
+    fontSize: fonts.sm,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: colors.primary,
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    padding: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.md,
+    marginBottom: dimensions.spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+  },
+  paymentTitle: {
+    fontSize: fonts.md,
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  paymentSub: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  paymentAmountInline: {
+    fontSize: fonts.md,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
   statusButton: {
     flex: 1,
     paddingVertical: dimensions.spacing.sm,
@@ -529,6 +734,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
     marginBottom: dimensions.spacing.md,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: dimensions.spacing.md,
+  },
+  linkButtonText: {
+    color: colors.primary,
+    fontSize: fonts.md,
+    fontWeight: '600',
+  },
+  openButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: 6,
+    borderRadius: 18,
+    backgroundColor: 'rgba(79,70,229,0.06)',
+  },
+  openButtonText: {
+    color: colors.primary,
+    fontSize: fonts.sm,
+    fontWeight: '700',
+  },
+  openButtonIcon: {
+    color: colors.primary,
+    fontSize: fonts.md,
+    marginLeft: 6,
+    marginTop: -1,
   },
   infoCard: {
     backgroundColor: colors.white,
@@ -618,6 +855,29 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fonts.sm,
     fontWeight: '600',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.white,
+    padding: dimensions.spacing.lg,
+    borderTopLeftRadius: dimensions.borderRadius.lg,
+    borderTopRightRadius: dimensions.borderRadius.lg,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: dimensions.spacing.md,
+  },
+  modalTitle: {
+    fontSize: fonts.lg,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
 });
 
