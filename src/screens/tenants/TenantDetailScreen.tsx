@@ -14,6 +14,8 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { colors, fonts, dimensions } from '../../constants';
 import { Tenant, TenantStatus } from '../../types/tenant.types';
 import { useTenants } from '../../hooks/useTenants';
+import { tenantApiService } from '../../services/api/tenantApi';
+import { firestoreService } from '../../services/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface TenantDetailScreenProps {
@@ -22,28 +24,56 @@ interface TenantDetailScreenProps {
 }
 
 const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, route }) => {
-  const { tenantId } = route.params || {};
-  const { getTenantById, updateTenant, deleteTenant, loading, error, clearError } = useTenants();
+  const { tenantId, tenant: tenantFromParams } = route.params || {};
+  const { tenant: tenantFromHook, getTenantById, updateTenant, deleteTenant, loading, error, clearError } = useTenants();
   const { user } = useAuth();
   
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(tenantFromParams || null);
   const [userDetails, setUserDetails] = useState<any>(null);
   const [propertyDetails, setPropertyDetails] = useState<any>(null);
 
   useFocusEffect(
     React.useCallback(() => {
-      if (tenantId) {
-        loadTenantDetails();
-      }
-    }, [tenantId])
+      const init = async () => {
+        if (tenantFromParams) {
+          setTenant(tenantFromParams);
+          await loadRelatedDetails(tenantFromParams);
+          return;
+        }
+        if (tenantId) {
+          await loadTenantDetails();
+        }
+      };
+      init();
+    }, [tenantId, tenantFromParams])
   );
 
   const loadTenantDetails = async () => {
     try {
-      await getTenantById(tenantId);
-      // TODO: Load user and property details
+      const data = await tenantApiService.getTenantById(tenantId);
+      if (data) {
+        setTenant(data);
+        await loadRelatedDetails(data);
+      }
     } catch (error) {
       console.error('Error loading tenant details:', error);
+    }
+  };
+
+  const loadRelatedDetails = async (tenantData: Tenant) => {
+    try {
+      // Load user profile
+      if (tenantData.userId) {
+        const user = await firestoreService.getUserProfile(tenantData.userId);
+        setUserDetails(user);
+      }
+      // Load property details
+      if (tenantData.propertyId) {
+        const property = await firestoreService.getPropertyById(tenantData.propertyId);
+        setPropertyDetails(property);
+      }
+    } catch (e) {
+      console.error('Error loading related tenant details:', e);
     }
   };
 
@@ -182,9 +212,7 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Tenant Details</Text>
-        <TouchableOpacity style={styles.editButton} onPress={handleEditTenant}>
-          <Text style={styles.editButtonText}>Edit</Text>
-        </TouchableOpacity>
+        <View style={{ width: 48 }} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -223,16 +251,16 @@ const TenantDetailScreen: React.FC<TenantDetailScreenProps> = ({ navigation, rou
           <Text style={styles.sectionTitle}>Basic Information</Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Tenant ID:</Text>
-              <Text style={styles.infoValue}>#{tenant.userId.slice(-6)}</Text>
+              <Text style={styles.infoLabel}>Tenant:</Text>
+              <Text style={styles.infoValue}>{userDetails?.name || 'Unknown Tenant'}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Property ID:</Text>
-              <Text style={styles.infoValue}>#{tenant.propertyId.slice(-6)}</Text>
+              <Text style={styles.infoLabel}>Property:</Text>
+              <Text style={styles.infoValue}>{propertyDetails?.name || 'Unknown Property'}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Room ID:</Text>
-              <Text style={styles.infoValue}>#{tenant.roomId.slice(-6)}</Text>
+              <Text style={styles.infoLabel}>Room:</Text>
+              <Text style={styles.infoValue}>{tenant.roomId || 'N/A'}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Created:</Text>

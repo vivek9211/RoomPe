@@ -322,8 +322,8 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     setSearchQuery('');
     
     if (result.type === 'tenant') {
-      // Navigate to tenant details
-      navigation.navigate('TenantDetails', { tenantId: result.id });
+      // Navigate to tenant details with prefetched data
+      navigation.navigate('TenantDetail', { tenantId: result.id, tenant: result.data });
     } else if (result.type === 'room') {
       // Navigate to room management or room details
       navigation.navigate('RoomManagement', { 
