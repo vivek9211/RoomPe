@@ -24,6 +24,7 @@ import { Property } from '../../types/property.types';
 import { Tenant } from '../../types/tenant.types';
 import { Room } from '../../types/room.types';
 import { firestoreService } from '../../services/firestore';
+import firestore from '@react-native-firebase/firestore';
 import { tenantApiService } from '../../services/api/tenantApi';
 
 interface OwnerDashboardScreenProps {
@@ -60,6 +61,11 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  
+  // Payments summary state
+  const [todayCollection, setTodayCollection] = useState(0);
+  const [monthCollection, setMonthCollection] = useState(0);
+  const [monthDues, setMonthDues] = useState(0);
   
   // Animation values for scroll effects
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -122,6 +128,13 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     ]).start();
   }, []);
 
+  // Reload summary when properties or selection changes
+  useEffect(() => {
+    if (properties.length > 0) {
+      loadPaymentSummary();
+    }
+  }, [properties, selectedProperty]);
+
 
 
   const loadProperties = async () => {
@@ -161,6 +174,71 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     }
   };
 
+  const getCurrentMonthKey = () => {
+    const currentDate = new Date();
+    return currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  };
+
+  const isSameDay = (a: Date, b: Date) => {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  };
+
+  const loadPaymentSummary = async () => {
+    try {
+      const monthKey = getCurrentMonthKey();
+      const propertyIds = selectedProperty ? [selectedProperty.id] : properties.map(p => p.id);
+
+      let todaySum = 0;
+      let monthSum = 0;
+      let duesSum = 0;
+
+      const today = new Date();
+
+      // Firestore 'in' supports up to 10, so query in chunks
+      const chunkSize = 10;
+      for (let i = 0; i < propertyIds.length; i += chunkSize) {
+        const chunk = propertyIds.slice(i, i + chunkSize);
+        const snap = await firestore()
+          .collection('payments')
+          .where('propertyId', 'in', chunk)
+          .get();
+
+        snap.forEach(doc => {
+          const data: any = doc.data();
+          const status = data.status;
+          const amount = Number(data.amount) || 0;
+          const paidAt = data.paidAt?.toDate?.() as Date | undefined;
+          const dueDate = data.dueDate?.toDate?.() as Date | undefined;
+          const month = data.month as string | undefined;
+
+          // Month-to-date collection
+          if (status === 'paid' && (month === monthKey || (paidAt && paidAt.getMonth() === today.getMonth() && paidAt.getFullYear() === today.getFullYear()))) {
+            monthSum += amount;
+          }
+
+          // Today's collection
+          if (status === 'paid' && paidAt && isSameDay(paidAt, today)) {
+            todaySum += amount;
+          }
+
+          // Current month's dues (pending or overdue for current month)
+          if ((status === 'pending' || status === 'overdue') && (month === monthKey || (dueDate && dueDate.getMonth() === today.getMonth() && dueDate.getFullYear() === today.getFullYear()))) {
+            duesSum += amount + (Number(data.lateFee) || 0);
+          }
+        });
+      }
+
+      setTodayCollection(todaySum);
+      setMonthCollection(monthSum);
+      setMonthDues(duesSum);
+    } catch (error) {
+      console.error('Error loading payment summary:', error);
+      setTodayCollection(0);
+      setMonthCollection(0);
+      setMonthDues(0);
+    }
+  };
+
   const handlePropertySwitch = () => {
     navigation.navigate('PropertySelection');
   };
@@ -196,13 +274,9 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
 
 
 
-  const getCurrentMonth = () => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return months[new Date().getMonth()];
-  };
+  const getCurrentMonth = () => new Date().toLocaleString('en-US', { month: 'long' });
+
+  const formatCurrency = (value: number) => `₹${Math.round(value).toLocaleString('en-IN')}`;
 
   // Search functions
   const searchTenantsAndRooms = async (query: string) => {
@@ -472,20 +546,18 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
             </TouchableOpacity>
           </View>
           
-          <View style={styles.summaryCards}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryAmount}>₹0</Text>
+          <View style={styles.summaryGrid}>
+            <View style={[styles.summaryCard, styles.summaryCardPrimary]}>
               <Text style={styles.summaryLabel}>Today's Collection</Text>
-              <Text style={styles.summaryIcon}>💰</Text>
+              <Text style={styles.summaryAmount}>{formatCurrency(todayCollection)}</Text>
             </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryAmount}>₹0</Text>
-              <Text style={styles.summaryLabel}>{getCurrentMonth()}'s Collection</Text>
-              <Text style={styles.summaryIcon}>💰</Text>
+            <View style={[styles.summaryCard, styles.summaryCardSuccess]}>
+              <Text style={styles.summaryLabel}>{getCurrentMonth()} Collection</Text>
+              <Text style={styles.summaryAmount}>{formatCurrency(monthCollection)}</Text>
             </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryAmount}>₹0</Text>
-              <Text style={styles.summaryLabel}>{getCurrentMonth()}'s Dues</Text>
+            <View style={[styles.summaryCard, styles.summaryCardWarning]}>
+              <Text style={styles.summaryLabel}>{getCurrentMonth()} Dues</Text>
+              <Text style={[styles.summaryAmount, { color: colors.error }]}>{formatCurrency(monthDues)}</Text>
             </View>
           </View>
         </View>
@@ -825,32 +897,47 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginRight: dimensions.spacing.sm,
   },
-  summaryCards: {
+  summaryGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: dimensions.spacing.sm,
   },
-     summaryCard: {
-     flex: 1,
-     backgroundColor: colors.white,
-     padding: dimensions.spacing.md,
-     borderRadius: dimensions.borderRadius.lg,
-     marginHorizontal: dimensions.spacing.xs,
-     alignItems: 'center',
-   },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: colors.white,
+    paddingVertical: dimensions.spacing.md,
+    paddingHorizontal: dimensions.spacing.md,
+    borderRadius: dimensions.borderRadius.lg,
+    alignItems: 'flex-start',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  summaryCardPrimary: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  summaryCardSuccess: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.success,
+  },
+  summaryCardWarning: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
+  },
   summaryAmount: {
     fontSize: fonts.xl,
     fontWeight: 'bold',
-    color: colors.success,
+    color: colors.textPrimary,
+    marginTop: dimensions.spacing.xs,
     marginBottom: dimensions.spacing.xs,
   },
   summaryLabel: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: dimensions.spacing.xs,
-  },
-  summaryIcon: {
-    fontSize: 16,
   },
   quickActionsSection: {
     marginBottom: dimensions.spacing.xl,
@@ -866,12 +953,13 @@ const styles = StyleSheet.create({
     paddingVertical: dimensions.spacing.sm,
   },
   quickActionButton: {
-    width: 100,
-    minWidth: 100,
+    width: 96,
+    height: 96,
     backgroundColor: colors.white,
-    padding: dimensions.spacing.md,
+    padding: dimensions.spacing.sm,
     borderRadius: dimensions.borderRadius.lg,
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: dimensions.spacing.md,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
