@@ -578,22 +578,20 @@ const TenantListScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Property Selector */}
-      <View style={styles.propertyContainer}>
-        <Text style={styles.propertyLabel}>Select Property</Text>
-        <TouchableOpacity
-          style={styles.propertyPicker}
-          onPress={() => setShowPropertyPicker(true)}
-        >
-          <Text style={selectedProperty ? styles.propertyPickerText : styles.propertyPickerPlaceholder}>
-            {selectedProperty 
-              ? availableProperties.find(p => p.id === selectedProperty)?.name || 'Selected Property'
-              : 'Choose a property to view tenants'
-            }
-          </Text>
-          <Text style={styles.propertyPickerArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Property Filter */}
+      <TouchableOpacity
+        style={styles.propertyFilter}
+        onPress={() => setShowPropertyPicker(true)}
+      >
+        <Text style={styles.propertyFilterIcon}>🏢</Text>
+        <Text style={selectedProperty ? styles.propertyFilterText : styles.propertyFilterPlaceholder}>
+          {selectedProperty 
+            ? availableProperties.find(p => p.id === selectedProperty)?.name || 'Selected Property'
+            : 'All Properties'
+          }
+        </Text>
+        <Text style={styles.propertyFilterArrow}>▼</Text>
+      </TouchableOpacity>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -651,7 +649,7 @@ const TenantListScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Property</Text>
+              <Text style={styles.modalTitle}>Properties</Text>
               <TouchableOpacity onPress={() => setShowPropertyPicker(false)}>
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
@@ -708,40 +706,43 @@ const styles = StyleSheet.create({
     fontSize: fonts.md,
     fontWeight: '600',
   },
-  propertyContainer: {
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
+  propertyFilter: {
     backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
-  },
-  propertyLabel: {
-    fontSize: fonts.md,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: dimensions.spacing.sm,
-  },
-  propertyPicker: {
-    backgroundColor: colors.lightGray,
-    borderRadius: dimensions.borderRadius.md,
     paddingHorizontal: dimensions.spacing.md,
-    paddingVertical: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    marginHorizontal: dimensions.spacing.lg,
+    marginTop: dimensions.spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  propertyPickerText: {
-    fontSize: fonts.md,
+  propertyFilterIcon: {
+    fontSize: 16,
+    marginRight: dimensions.spacing.sm,
+  },
+  propertyFilterText: {
+    fontSize: fonts.sm,
     color: colors.textPrimary,
     fontWeight: '500',
+    flex: 1,
   },
-  propertyPickerPlaceholder: {
-    fontSize: fonts.md,
+  propertyFilterPlaceholder: {
+    fontSize: fonts.sm,
     color: colors.textMuted,
+    fontWeight: '500',
+    flex: 1,
   },
-  propertyPickerArrow: {
-    fontSize: fonts.lg,
+  propertyFilterArrow: {
+    fontSize: 12,
     color: colors.textSecondary,
+    marginLeft: dimensions.spacing.sm,
   },
   searchContainer: {
     paddingHorizontal: dimensions.spacing.lg,

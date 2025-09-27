@@ -61,15 +61,20 @@ export const usePayments = () => {
     }
   }, [userProfile?.uid]);
 
-  // Load all payments for the current user
+  // Load payments - if user is owner, load all; if tenant, load own
   const loadPayments = useCallback(async (filters?: PaymentFilters) => {
-    if (!userProfile?.uid) return;
-
     try {
-    setLoading(true);
-    setError(null);
-      
-      const paymentsData = await paymentService.getTenantPayments(userProfile.uid, filters);
+      setLoading(true);
+      setError(null);
+
+      let paymentsData: Payment[] = [];
+      const role = (userProfile as any)?.role;
+      if (role === 'owner' || role === 'admin' || role === 'manager') {
+        paymentsData = await paymentService.getAllPayments(filters);
+      } else if (userProfile?.uid) {
+        paymentsData = await paymentService.getTenantPayments(userProfile.uid, filters);
+      }
+
       setPayments(paymentsData);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch payments';
@@ -78,7 +83,7 @@ export const usePayments = () => {
     } finally {
       setLoading(false);
     }
-  }, [userProfile?.uid]);
+  }, [userProfile]);
 
   // Create deposit payment
   const createDepositPayment = useCallback(async (propertyId: string, roomId: string, depositAmount: number): Promise<string> => {

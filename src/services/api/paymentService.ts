@@ -315,6 +315,52 @@ export class PaymentService {
   }
 
   /**
+   * Get all payments (owner/operator view)
+   */
+  async getAllPayments(filters?: PaymentFilters): Promise<Payment[]> {
+    try {
+      // Basic fetch of all payments, then filter in-memory to avoid index constraints
+      const snapshot = await firestore().collection(this.collection).get();
+
+      let payments = snapshot.docs.map((doc: any) => ({
+        id: doc.id,
+        ...doc.data()
+      } as Payment));
+
+      if (filters?.propertyId) {
+        payments = payments.filter(p => p.propertyId === filters.propertyId);
+      }
+      if (filters?.roomId) {
+        payments = payments.filter(p => p.roomId === filters.roomId);
+      }
+      if (filters?.tenantId) {
+        payments = payments.filter(p => p.tenantId === filters.tenantId);
+      }
+      if (filters?.status && filters.status.length > 0) {
+        payments = payments.filter(p => filters.status!.includes(p.status));
+      }
+      if (filters?.type && filters.type.length > 0) {
+        payments = payments.filter(p => filters.type!.includes(p.type));
+      }
+      if (filters?.month) {
+        payments = payments.filter(p => p.month === filters.month);
+      }
+
+      // Sort by createdAt desc
+      payments.sort((a, b) => {
+        const aTime = a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
+        const bTime = b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
+        return bTime - aTime;
+      });
+
+      return payments;
+    } catch (error) {
+      console.error('Error fetching all payments:', error);
+      throw new Error('Failed to fetch payments');
+    }
+  }
+
+  /**
    * Get current month's rent payment for a tenant
    */
   async getCurrentMonthRent(userId: string): Promise<Payment | null> {
