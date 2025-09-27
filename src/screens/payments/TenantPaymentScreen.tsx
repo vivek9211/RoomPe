@@ -73,12 +73,18 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
     verifyPayment,
     syncAllPayments,
     cleanupDuplicatePayments,
-    clearError
+    clearError,
+    getTenantDepositInfo,
+    createDepositPayment,
+    processDepositPayment,
+    verifyDepositPayment
   } = usePayments();
 
   const [refreshing, setRefreshing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
   const [autoSyncCompleted, setAutoSyncCompleted] = useState(false);
+  const [depositInfo, setDepositInfo] = useState<any>(null);
+  const [processingDeposit, setProcessingDeposit] = useState(false);
 
   // Auto-sync payment status when screen loads (only once)
   useEffect(() => {
@@ -128,6 +134,20 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
     };
   }, []); // Empty dependency array - only run once on mount
 
+  // Load deposit info when component mounts
+  useEffect(() => {
+    loadDepositInfo();
+  }, []);
+
+  const loadDepositInfo = async () => {
+    try {
+      const deposit = await getTenantDepositInfo();
+      setDepositInfo(deposit);
+    } catch (error) {
+      console.error('Error loading deposit info:', error);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     setAutoSyncCompleted(false); // Reset auto-sync flag for manual refresh
@@ -146,12 +166,90 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
         loadPayments(),
         loadCurrentMonthRent(),
         loadPendingPayments(),
-        loadPaymentStats()
+        loadPaymentStats(),
+        loadDepositInfo()
       ]);
     } catch (err) {
       console.error('Error refreshing payments:', err);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handlePayDeposit = async () => {
+    if (!depositInfo || !userProfile?.uid) {
+      Alert.alert('Error', 'Deposit information not available');
+      return;
+    }
+
+    try {
+      setProcessingDeposit(true);
+
+      // Create deposit payment
+      const paymentId = await createDepositPayment(
+        depositInfo.propertyId,
+        depositInfo.roomId,
+        depositInfo.depositAmount
+      );
+
+      // Process payment with Razorpay
+      const orderData = await processDepositPayment(paymentId, userProfile.uid, depositInfo.propertyId);
+
+      // Open Razorpay checkout
+      const RazorpayCheckout = require('react-native-razorpay').default;
+      const options = {
+        description: 'Security Deposit Payment',
+        image: 'https://your-logo-url.com/logo.png',
+        currency: 'INR',
+        key: orderData.keyId,
+        amount: orderData.amount,
+        order_id: orderData.orderId,
+        name: 'RoomPe',
+        prefill: {
+          email: userProfile.email || '',
+          contact: userProfile.phone || '',
+          name: userProfile.name || '',
+        },
+        theme: { color: colors.primary },
+        handler: async (response: any) => {
+          try {
+            await verifyDepositPayment(
+              paymentId,
+              response.razorpay_payment_id,
+              response.razorpay_order_id,
+              response.razorpay_signature
+            );
+
+            Alert.alert(
+              'Payment Successful!',
+              'Your security deposit has been paid successfully.',
+              [{ text: 'OK', onPress: () => onRefresh() }]
+            );
+          } catch (verifyError: any) {
+            Alert.alert(
+              'Payment Successful!',
+              'Your security deposit payment has been processed. The payment status will be updated automatically.',
+              [{ text: 'OK', onPress: () => onRefresh() }]
+            );
+          } finally {
+            setProcessingDeposit(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setProcessingDeposit(false);
+          },
+        },
+      };
+
+      RazorpayCheckout.open(options).catch((error: any) => {
+        Alert.alert('Error', 'Payment cancelled or failed');
+        setProcessingDeposit(false);
+      });
+
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to process deposit payment');
+      setProcessingDeposit(false);
     }
   };
 
@@ -270,7 +368,9 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
         <View style={styles.paymentHeader}>
           <View style={styles.paymentInfo}>
             <Text style={styles.paymentType}>
-              {payment.type === PaymentType.RENT ? 'Monthly Rent' : payment.type}
+              {payment.type === PaymentType.RENT ? 'Monthly Rent' : 
+               payment.type === PaymentType.SECURITY_DEPOSIT ? 'Security Deposit' : 
+               payment.type}
             </Text>
             <Text style={styles.paymentMonth}>{payment.month}</Text>
           </View>
@@ -282,14 +382,14 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
         <View style={styles.paymentDetails}>
           <View style={styles.amountRow}>
             <Text style={styles.amountLabel}>Amount:</Text>
-            <Text style={styles.amountValue}>₹{formatCurrency(payment.amount)}</Text>
+            <Text style={styles.amountValue}>{formatCurrency(payment.amount)}</Text>
           </View>
           
           {payment.lateFee && payment.lateFee > 0 && (
             <View style={styles.amountRow}>
               <Text style={styles.amountLabel}>Late Fee:</Text>
               <Text style={[styles.amountValue, { color: colors.error }]}>
-                ₹{formatCurrency(payment.lateFee)}
+                {formatCurrency(payment.lateFee)}
               </Text>
             </View>
           )}
@@ -360,7 +460,7 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
                 </View>
               </View>
               <Text style={styles.currentAmount}>
-                ₹{formatCurrency(currentMonthRent.amount + (currentMonthRent.lateFee || 0))}
+                {formatCurrency(currentMonthRent.amount + (currentMonthRent.lateFee || 0))}
               </Text>
               {currentMonthRent.status === PaymentStatus.PENDING || currentMonthRent.status === PaymentStatus.OVERDUE ? (
                 <TouchableOpacity
@@ -379,30 +479,74 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
           </View>
         )}
 
+        {/* Security Deposit Section */}
+        {depositInfo && (
+          <View style={styles.depositSection}>
+            <Text style={styles.sectionTitle}>Security Deposit</Text>
+            <View style={styles.depositCard}>
+              <View style={styles.depositHeader}>
+                <Text style={styles.depositTitle}>Security Deposit</Text>
+                <View style={[styles.depositStatusBadge, { 
+                  backgroundColor: depositInfo.depositPaid ? colors.success : colors.warning 
+                }]}>
+                  <Text style={styles.depositStatusText}>
+                    {depositInfo.depositPaid ? 'Paid' : 'Pending'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.depositAmount}>
+                {formatCurrency(depositInfo.depositAmount)}
+              </Text>
+              {depositInfo.depositPaid ? (
+                <View style={styles.depositPaidInfo}>
+                  <Text style={styles.depositPaidText}>
+                    Paid on: {formatDate(depositInfo.depositPaidAt)}
+                  </Text>
+                  <Text style={styles.depositNote}>
+                    This is a one-time payment. The deposit will be refunded when you move out.
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.depositPayButton}
+                  onPress={handlePayDeposit}
+                  disabled={processingDeposit}
+                >
+                  {processingDeposit ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Text style={styles.depositPayButtonText}>Pay Deposit</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Payment Statistics */}
         {paymentStats && (
           <View style={styles.statsSection}>
             <Text style={styles.sectionTitle}>Payment Summary</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
-                <Text style={styles.statValue}>₹{formatCurrency(paymentStats.totalAmount)}</Text>
+                <Text style={styles.statValue}>{formatCurrency(paymentStats.totalAmount)}</Text>
                 <Text style={styles.statLabel}>Total Amount</Text>
               </View>
               <View style={styles.statCard}>
                 <Text style={[styles.statValue, { color: colors.success }]}>
-                  ₹{formatCurrency(paymentStats.paidAmount)}
+                  {formatCurrency(paymentStats.paidAmount)}
                 </Text>
                 <Text style={styles.statLabel}>Paid</Text>
               </View>
               <View style={styles.statCard}>
                 <Text style={[styles.statValue, { color: colors.warning }]}>
-                  ₹{formatCurrency(paymentStats.pendingAmount)}
+                  {formatCurrency(paymentStats.pendingAmount)}
                 </Text>
                 <Text style={styles.statLabel}>Pending</Text>
               </View>
               <View style={styles.statCard}>
                 <Text style={[styles.statValue, { color: colors.error }]}>
-                  ₹{formatCurrency(paymentStats.overdueAmount)}
+                  {formatCurrency(paymentStats.overdueAmount)}
                 </Text>
                 <Text style={styles.statLabel}>Overdue</Text>
               </View>
@@ -415,7 +559,7 @@ const TenantPaymentScreen: React.FC<TenantPaymentScreenProps> = ({ navigation })
           <View style={styles.outstandingSection}>
             <View style={styles.outstandingCard}>
               <Text style={styles.outstandingTitle}>Total Outstanding</Text>
-              <Text style={styles.outstandingAmount}>₹{formatCurrency(totalOutstanding)}</Text>
+              <Text style={styles.outstandingAmount}>{formatCurrency(totalOutstanding)}</Text>
               <Text style={styles.outstandingSubtitle}>
                 {overduePayments.length > 0 
                   ? `${overduePayments.length} payment(s) overdue`
@@ -516,7 +660,7 @@ const styles = StyleSheet.create({
   currentMonthCard: {
     backgroundColor: colors.white,
     borderRadius: dimensions.borderRadius.lg,
-    padding: dimensions.spacing.lg,
+    padding: dimensions.spacing.md,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -625,7 +769,7 @@ const styles = StyleSheet.create({
   paymentCard: {
     backgroundColor: colors.white,
     borderRadius: dimensions.borderRadius.lg,
-    padding: dimensions.spacing.lg,
+    padding: dimensions.spacing.md,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -725,6 +869,78 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fonts.sm,
     fontWeight: '500',
+  },
+  depositSection: {
+    marginBottom: dimensions.spacing.lg,
+  },
+  depositCard: {
+    backgroundColor: colors.white,
+    borderRadius: dimensions.borderRadius.lg,
+    padding: dimensions.spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  depositHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.sm,
+  },
+  depositTitle: {
+    fontSize: fonts.lg,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  depositStatusBadge: {
+    paddingHorizontal: dimensions.spacing.md,
+    paddingVertical: dimensions.spacing.sm,
+    borderRadius: dimensions.borderRadius.sm,
+  },
+  depositStatusText: {
+    color: colors.white,
+    fontSize: fonts.sm,
+    fontWeight: '600',
+  },
+  depositAmount: {
+    fontSize: fonts.xl,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: dimensions.spacing.md,
+  },
+  depositPaidInfo: {
+    backgroundColor: colors.successLight,
+    borderRadius: dimensions.borderRadius.md,
+    padding: dimensions.spacing.sm,
+  },
+  depositPaidText: {
+    fontSize: fonts.sm,
+    color: colors.success,
+    fontWeight: '600',
+    marginBottom: dimensions.spacing.xs,
+  },
+  depositNote: {
+    fontSize: fonts.xs,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  depositPayButton: {
+    backgroundColor: colors.primary,
+    borderRadius: dimensions.borderRadius.lg,
+    padding: dimensions.spacing.md,
+    alignItems: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  depositPayButtonText: {
+    color: colors.white,
+    fontSize: fonts.lg,
+    fontWeight: '600',
   },
 });
 

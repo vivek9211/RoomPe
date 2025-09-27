@@ -12,8 +12,10 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, fonts, dimensions } from '../../constants';
 import { Property } from '../../types/property.types';
-import { TenantApplication } from '../../types/tenant.types';
+import { TenantApplication, Tenant } from '../../types/tenant.types';
 import { firestoreService } from '../../services/firestore';
+import { useAuth } from '../../contexts/AuthContext';
+import { tenantApiService } from '../../services/api/tenantApi';
 
 interface AssignedPropertyDetailScreenProps {
   navigation: any;
@@ -23,18 +25,104 @@ interface AssignedPropertyDetailScreenProps {
 interface AssignedPropertyData {
   application: TenantApplication;
   property: Property;
+  tenant?: Tenant;
 }
 
 const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> = ({ navigation, route }) => {
   const { property, application } = route.params || {};
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [propertyData, setPropertyData] = useState<AssignedPropertyData | null>(null);
+  const [roomInfo, setRoomInfo] = useState<any>(null);
+
+  const loadRoomInfo = async (roomId: string) => {
+    try {
+      // Try to get room mapping first (now that we've added tenant permissions)
+      try {
+        const roomMapping = await firestoreService.getRoomMapping(property.id);
+        if (roomMapping && roomMapping.floors) {
+          // Search through floors to find the room
+          for (const floor of roomMapping.floors) {
+            if (floor.units) {
+              for (const unit of floor.units) {
+                if (unit.id === roomId) {
+                  return {
+                    roomNumber: unit.unitNumber,
+                    roomType: unit.unitType,
+                    floorName: floor.floorName,
+                    capacity: unit.capacity,
+                    sharingType: unit.sharingType
+                  };
+                }
+              }
+            }
+          }
+        }
+      } catch (mappingError) {
+        console.log('Room mapping not accessible, using fallback approach');
+      }
+      
+      // Fallback approach if room mapping is not accessible
+      // Try to parse room number from roomId (assuming format like "room_101" or "101")
+      let roomNumber = roomId;
+      if (roomId.includes('_')) {
+        roomNumber = roomId.split('_').pop() || roomId;
+      }
+      
+      // Try to determine room type from property type or use default
+      const propertyType = propertyData?.property?.type || 'flat';
+      let roomType = 'Room';
+      if (propertyType === 'flat' || propertyType === 'apartment') {
+        roomType = 'Flat';
+      } else if (propertyType === 'pg') {
+        roomType = 'Room';
+      }
+      
+      return {
+        roomNumber: roomNumber,
+        roomType: roomType,
+        floorName: 'Ground Floor', // Default - could be enhanced
+        capacity: 1, // Default - could be enhanced
+        sharingType: 'Single' // Default - could be enhanced
+      };
+    } catch (error) {
+      console.error('Error loading room info:', error);
+      return null;
+    }
+  };
 
   useEffect(() => {
-    if (property && application) {
-      setPropertyData({ property, application });
-    }
-  }, [property, application]);
+    const loadPropertyData = async () => {
+      if (property && application && user) {
+        setLoading(true);
+        try {
+          // Fetch tenant data for the current user
+          const tenantData = await tenantApiService.getTenantByUserId(user.uid);
+          setPropertyData({ 
+            property, 
+            application, 
+            tenant: tenantData 
+          });
+
+          // Load room information if tenant has roomId
+          if (tenantData?.roomId) {
+            const room = await loadRoomInfo(tenantData.roomId);
+            setRoomInfo(room);
+          }
+        } catch (error) {
+          console.error('Error loading tenant data:', error);
+          // Fallback to property data without tenant info
+          setPropertyData({ property, application });
+        } finally {
+          setLoading(false);
+        }
+      } else if (property && application) {
+        setPropertyData({ property, application });
+      }
+    };
+
+    loadPropertyData();
+  }, [property, application, user]);
 
   if (!propertyData) {
     return (
@@ -71,6 +159,41 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
       year: 'numeric',
       month: 'long',
       day: 'numeric',
+    });
+  };
+
+  const formatRoomType = (roomType: string) => {
+    switch (roomType?.toLowerCase()) {
+      case 'room':
+        return 'Room';
+      case 'flat':
+        return 'Flat';
+      case 'rk':
+        return 'RK';
+      case '1bhk':
+        return '1 BHK';
+      case '2bhk':
+        return '2 BHK';
+      case '3bhk':
+        return '3 BHK';
+      default:
+        return roomType || 'Room';
+    }
+  };
+
+  const handlePayDeposit = () => {
+    if (propertyData.tenant?.depositPaid) {
+      Alert.alert(
+        'Deposit Already Paid',
+        'Your security deposit has already been paid.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    navigation.navigate('DepositPayment', {
+      property: propertyData.property,
+      tenant: propertyData.tenant,
     });
   };
 
@@ -164,28 +287,47 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </View>
           </View>
 
-          {/* Application Details */}
-          <View style={styles.applicationSection}>
-            <Text style={styles.sectionTitle}>Application Details</Text>
+          {/* Room Details */}
+          <View style={styles.roomSection}>
+            <Text style={styles.sectionTitle}>Assigned Room</Text>
             
-            {propertyData.application.requestedRent && (
+            {roomInfo ? (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Room Type:</Text>
+                  <Text style={styles.detailValue}>{formatRoomType(roomInfo.roomType)}</Text>
+                </View>
+                
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Room Number:</Text>
+                  <Text style={styles.detailValue}>{roomInfo.roomNumber}</Text>
+                </View>
+                
+                {roomInfo.floorName && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Floor:</Text>
+                    <Text style={styles.detailValue}>{roomInfo.floorName}</Text>
+                  </View>
+                )}
+                
+                {roomInfo.capacity && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Capacity:</Text>
+                    <Text style={styles.detailValue}>{roomInfo.capacity} person{roomInfo.capacity > 1 ? 's' : ''}</Text>
+                  </View>
+                )}
+                
+                {roomInfo.sharingType && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Sharing:</Text>
+                    <Text style={styles.detailValue}>{roomInfo.sharingType}</Text>
+                  </View>
+                )}
+              </>
+            ) : (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Requested Rent:</Text>
-                <Text style={styles.detailValue}>₹{propertyData.application.requestedRent}/month</Text>
-              </View>
-            )}
-            
-            {propertyData.application.roomPreference && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Room Preference:</Text>
-                <Text style={styles.detailValue}>{propertyData.application.roomPreference}</Text>
-              </View>
-            )}
-            
-            {propertyData.application.additionalNotes && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Additional Notes:</Text>
-                <Text style={styles.detailValue}>{propertyData.application.additionalNotes}</Text>
+                <Text style={styles.detailLabel}>Room Assignment:</Text>
+                <Text style={styles.detailValue}>Pending</Text>
               </View>
             )}
           </View>
@@ -195,12 +337,16 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             <View style={styles.pricingSection}>
               <Text style={styles.sectionTitle}>Property Pricing</Text>
               <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Base Rent:</Text>
-                <Text style={styles.pricingValue}>₹{propertyData.property.pricing.baseRent || 0}/month</Text>
+                <Text style={styles.pricingLabel}>Tenant Rent:</Text>
+                <Text style={styles.pricingValue}>
+                  ₹{propertyData.tenant?.rent || propertyData.property.pricing.baseRent || 0}/month
+                </Text>
               </View>
               <View style={styles.pricingRow}>
-                <Text style={styles.pricingLabel}>Deposit:</Text>
-                <Text style={styles.pricingValue}>₹{propertyData.property.pricing.deposit || 0}</Text>
+                <Text style={styles.pricingLabel}>Tenant Deposit:</Text>
+                <Text style={styles.pricingValue}>
+                  ₹{propertyData.tenant?.deposit || propertyData.property.pricing.deposit || 0}
+                </Text>
               </View>
               {propertyData.property.pricing.utilities && (
                 <View style={styles.pricingRow}>
@@ -233,8 +379,18 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
               <Text style={styles.actionButtonSubtext}>View rent & payments</Text>
             </TouchableOpacity>
             
+            {!propertyData.tenant?.depositPaid && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.warningButton]}
+                onPress={handlePayDeposit}
+              >
+                <Text style={styles.actionButtonText}>💳 Pay Deposit</Text>
+                <Text style={styles.actionButtonSubtext}>Pay security deposit</Text>
+              </TouchableOpacity>
+            )}
+            
             <TouchableOpacity
-              style={[styles.actionButton, styles.warningButton]}
+              style={[styles.actionButton, styles.infoButton]}
               onPress={handleReportIssue}
             >
               <Text style={styles.actionButtonText}>🔧 Report Issue</Text>
@@ -242,7 +398,7 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.infoButton]}
+              style={[styles.actionButton, styles.secondaryButton]}
               onPress={handleViewMaintenance}
             >
               <Text style={styles.actionButtonText}>📋 Maintenance</Text>
@@ -250,7 +406,7 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.secondaryButton]}
+              style={[styles.actionButton, styles.editButton]}
               onPress={handleContactOwner}
             >
               <Text style={styles.actionButtonText}>📞 Contact Owner</Text>
@@ -258,7 +414,7 @@ const AssignedPropertyDetailScreen: React.FC<AssignedPropertyDetailScreenProps> 
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.actionButton, styles.editButton]}
+              style={[styles.actionButton, styles.grayButton]}
               onPress={handleViewDocuments}
             >
               <Text style={styles.actionButtonText}>📄 Documents</Text>
@@ -404,7 +560,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  applicationSection: {
+  roomSection: {
     borderTopWidth: 1,
     borderTopColor: colors.lightGray,
     paddingTop: dimensions.spacing.md,
@@ -493,6 +649,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning,
   },
   editButton: {
+    backgroundColor: colors.gray,
+  },
+  grayButton: {
     backgroundColor: colors.gray,
   },
   actionButtonText: {

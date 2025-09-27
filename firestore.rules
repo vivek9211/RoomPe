@@ -9,12 +9,6 @@ service cloud.firestore {
              get(/databases/$(database)/documents/properties/$(propertyId)).data.ownerId == request.auth.uid;
     }
 
-    // Helper function to check if user is a tenant of a property
-    function userIsTenantOfProperty(propertyId) {
-      return exists(/databases/$(database)/documents/tenants/{tenantId}) &&
-             resource.data.propertyId == propertyId &&
-             resource.data.userId == request.auth.uid;
-    }
     
     // Users collection rules
     match /users/{userId} {
@@ -58,6 +52,10 @@ service cloud.firestore {
     match /room_mappings/{propertyId} {
       allow read, write: if request.auth != null && 
         (resource == null || userOwnsProperty(propertyId));
+      
+      // Allow all authenticated users to read room mappings (simplified for now)
+      // In production, you might want to restrict this further
+      allow read: if request.auth != null;
     }
 
     // Tenants collection rules
@@ -77,6 +75,16 @@ service cloud.firestore {
       allow read: if request.auth != null && 
         (resource.data.userId == request.auth.uid ||
          userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to update their own tenant records (for deposit status, etc.)
+      allow update: if request.auth != null && 
+        (resource.data.userId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to create their own tenant records
+      allow create: if request.auth != null && 
+        (request.resource.data.userId == request.auth.uid ||
+         userOwnsProperty(request.resource.data.propertyId));
     }
 
     // Rentals collection rules
@@ -183,13 +191,5 @@ service cloud.firestore {
       // Allow listing for authenticated users (simplified for now)
       allow list: if request.auth != null;
     }
-
-
-
-
-
-
-
-
   }
 }

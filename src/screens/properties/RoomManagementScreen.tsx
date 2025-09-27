@@ -28,6 +28,8 @@ import { Tenant, TenantStatus } from '../../types/tenant.types';
 import { User } from '../../types/user.types';
 import { firestoreService } from '../../services/firestore';
 import { tenantApiService } from '../../services/api/tenantApi';
+import { paymentService } from '../../services/api/paymentService';
+import { PaymentStatus, PaymentType } from '../../types/payment.types';
 
 interface RoomManagementScreenProps {
   navigation: any;
@@ -59,6 +61,13 @@ interface TenantDisplay {
   deposit: number;
   agreementStart: Date;
   agreementEnd: Date;
+  // Payment information
+  depositPaid: boolean;
+  depositPaidAt?: Date;
+  currentMonthRentStatus: PaymentStatus;
+  lastPaymentDate?: Date;
+  outstandingAmount: number;
+  latePayments: number;
 }
 
 interface UnitWithDetails extends Unit {
@@ -190,6 +199,105 @@ const getDefaultAmenitiesForSharingType = (sharingType: RoomSharingType): string
 // Helper function to determine room status based on tenant occupancy
 const getRoomStatus = (tenantCount: number): 'available' | 'occupied' | 'maintenance' | 'reserved' => {
   return tenantCount > 0 ? 'occupied' : 'available';
+};
+
+// Helper function to get payment status color
+const getPaymentStatusColor = (status: PaymentStatus): string => {
+  switch (status) {
+    case PaymentStatus.PAID:
+      return colors.success;
+    case PaymentStatus.PENDING:
+      return colors.warning;
+    case PaymentStatus.OVERDUE:
+      return colors.error;
+    case PaymentStatus.FAILED:
+      return colors.error;
+    case PaymentStatus.CANCELLED:
+      return colors.gray;
+    case PaymentStatus.REFUNDED:
+      return colors.info;
+    default:
+      return colors.gray;
+  }
+};
+
+// Helper function to get payment status text
+const getPaymentStatusText = (status: PaymentStatus): string => {
+  switch (status) {
+    case PaymentStatus.PAID:
+      return 'Paid';
+    case PaymentStatus.PENDING:
+      return 'Pending';
+    case PaymentStatus.OVERDUE:
+      return 'Overdue';
+    case PaymentStatus.FAILED:
+      return 'Failed';
+    case PaymentStatus.CANCELLED:
+      return 'Cancelled';
+    case PaymentStatus.REFUNDED:
+      return 'Refunded';
+    default:
+      return 'Unknown';
+  }
+};
+
+// Helper function to fetch tenant payment information
+const getTenantPaymentInfo = async (tenantId: string): Promise<{
+  depositPaid: boolean;
+  depositPaidAt?: Date;
+  currentMonthRentStatus: PaymentStatus;
+  lastPaymentDate?: Date;
+  outstandingAmount: number;
+  latePayments: number;
+}> => {
+  try {
+    // Get tenant data
+    const tenantData = await paymentService.getTenantByTenantId(tenantId);
+    if (!tenantData) {
+      return {
+        depositPaid: false,
+        currentMonthRentStatus: PaymentStatus.PENDING,
+        outstandingAmount: 0,
+        latePayments: 0,
+      };
+    }
+
+    // Get current month rent status
+    const currentMonthRent = await paymentService.getCurrentMonthRent(tenantData.userId);
+    const currentMonthRentStatus = currentMonthRent?.status || PaymentStatus.PENDING;
+
+    // Get pending payments to calculate outstanding amount
+    const pendingPayments = await paymentService.getPendingPayments(tenantData.userId);
+    const outstandingAmount = pendingPayments.reduce((total, payment) => {
+      return total + payment.amount + (payment.lateFee || 0);
+    }, 0);
+
+    // Get all payments to find last payment date and late payments count
+    const allPayments = await paymentService.getTenantPayments(tenantData.userId);
+    const paidPayments = allPayments.filter(p => p.status === PaymentStatus.PAID);
+    const lastPaymentDate = paidPayments.length > 0 
+      ? paidPayments.sort((a, b) => b.paidAt?.toDate().getTime() - a.paidAt?.toDate().getTime())[0].paidAt?.toDate()
+      : undefined;
+
+    const latePayments = allPayments.filter(p => p.status === PaymentStatus.OVERDUE).length;
+
+    return {
+      depositPaid: tenantData.depositPaid || false,
+      depositPaidAt: tenantData.depositPaidAt?.toDate(),
+      currentMonthRentStatus,
+      lastPaymentDate,
+      outstandingAmount,
+      latePayments,
+    };
+  } catch (error) {
+    console.error('Error fetching tenant payment info:', error);
+    return {
+      depositPaid: false,
+      currentMonthRentStatus: PaymentStatus.PENDING,
+      outstandingAmount: 0,
+      latePayments: 0,
+    };
+  }
 };
 
 const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation, route }) => {
@@ -348,6 +456,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                   unitTenants.map(async (tenant) => {
                     try {
                       const user = await firestoreService.getUserProfile(tenant.userId);
+                      const paymentInfo = await getTenantPaymentInfo(tenant.id);
+                      
                       return {
                         id: tenant.id,
                         name: user?.name || 'Unknown Tenant',
@@ -358,6 +468,13 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                         deposit: tenant.deposit,
                         agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
                         agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
+                        // Payment information
+                        depositPaid: paymentInfo.depositPaid,
+                        depositPaidAt: paymentInfo.depositPaidAt,
+                        currentMonthRentStatus: paymentInfo.currentMonthRentStatus,
+                        lastPaymentDate: paymentInfo.lastPaymentDate,
+                        outstandingAmount: paymentInfo.outstandingAmount,
+                        latePayments: paymentInfo.latePayments,
                       };
                     } catch (error) {
                       console.error('Error loading tenant details:', error);
@@ -371,6 +488,11 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                         deposit: 0,
                         agreementStart: new Date(),
                         agreementEnd: new Date(),
+                        // Default payment information
+                        depositPaid: false,
+                        currentMonthRentStatus: PaymentStatus.PENDING,
+                        outstandingAmount: 0,
+                        latePayments: 0,
                       };
                     }
                   })
@@ -466,6 +588,8 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                   unitTenants.map(async (tenant) => {
                     try {
                       const user = await firestoreService.getUserProfile(tenant.userId);
+                      const paymentInfo = await getTenantPaymentInfo(tenant.id);
+                      
                       return {
                         id: tenant.id,
                         name: user?.name || 'Unknown Tenant',
@@ -476,6 +600,13 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                         deposit: tenant.deposit,
                         agreementStart: tenant.agreementStart?.toDate?.() || new Date(),
                         agreementEnd: tenant.agreementEnd?.toDate?.() || new Date(),
+                        // Payment information
+                        depositPaid: paymentInfo.depositPaid,
+                        depositPaidAt: paymentInfo.depositPaidAt,
+                        currentMonthRentStatus: paymentInfo.currentMonthRentStatus,
+                        lastPaymentDate: paymentInfo.lastPaymentDate,
+                        outstandingAmount: paymentInfo.outstandingAmount,
+                        latePayments: paymentInfo.latePayments,
                       };
                     } catch (error) {
                       console.error('Error loading tenant details:', error);
@@ -489,6 +620,11 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                         deposit: 0,
                         agreementStart: new Date(),
                         agreementEnd: new Date(),
+                        // Default payment information
+                        depositPaid: false,
+                        currentMonthRentStatus: PaymentStatus.PENDING,
+                        outstandingAmount: 0,
+                        latePayments: 0,
                       };
                     }
                   })
@@ -602,79 +738,6 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
     loadPropertyData();
   };
 
-  const debugShowAllTenants = async () => {
-    try {
-      const allTenants = await tenantApiService.getTenantsByProperty(property.id);
-      console.log('=== ALL TENANTS DEBUG ===');
-      console.log('Total tenants:', allTenants.length);
-      allTenants.forEach((tenant, index) => {
-        console.log(`Tenant ${index + 1}:`, {
-          id: tenant.id,
-          roomId: tenant.roomId,
-          propertyId: tenant.propertyId,
-          status: tenant.status,
-          rent: tenant.rent,
-          deposit: tenant.deposit,
-          userId: tenant.userId
-        });
-      });
-      console.log('=== END DEBUG ===');
-      
-      // Check if there are any pending tenants
-      const pendingTenants = allTenants.filter(tenant => tenant.status === 'pending');
-      
-      if (pendingTenants.length > 0) {
-        Alert.alert(
-          'Debug Info', 
-          `Found ${allTenants.length} tenants. ${pendingTenants.length} are pending. Would you like to activate them?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Activate Pending', 
-              onPress: () => activatePendingTenants(pendingTenants)
-            }
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Debug Info', 
-          `Found ${allTenants.length} tenants. All are active. Check console for details.`,
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('Error fetching tenants for debug:', error);
-      Alert.alert('Error', 'Failed to fetch tenant data');
-    }
-  };
-
-  const activatePendingTenants = async (pendingTenants: any[]) => {
-    try {
-      setLoading(true);
-      let activatedCount = 0;
-      
-      for (const tenant of pendingTenants) {
-        try {
-          await tenantApiService.activateTenant(tenant.id);
-          activatedCount++;
-          console.log(`Activated tenant ${tenant.id} (Room ${tenant.roomId})`);
-        } catch (error) {
-          console.error(`Failed to activate tenant ${tenant.id}:`, error);
-        }
-      }
-      
-      Alert.alert(
-        'Success', 
-        `Activated ${activatedCount} out of ${pendingTenants.length} pending tenants.`,
-        [{ text: 'OK', onPress: () => loadPropertyData() }]
-      );
-    } catch (error) {
-      console.error('Error activating tenants:', error);
-      Alert.alert('Error', 'Failed to activate some tenants');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleVacateUnit = (unitId: string) => {
     Alert.alert(
@@ -848,6 +911,59 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           📅 Agreement: {tenant.agreementStart.toLocaleDateString()} - {tenant.agreementEnd.toLocaleDateString()}
         </Text>
       </View>
+
+      {/* Payment Information Section */}
+      <View style={styles.paymentInfoSection}>
+        <Text style={styles.paymentSectionTitle}>Payment Information</Text>
+        
+        {/* Rent Payment Status */}
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>Rent Status:</Text>
+          <View style={[styles.paymentStatusBadge, { backgroundColor: getPaymentStatusColor(tenant.currentMonthRentStatus) }]}>
+            <Text style={styles.paymentStatusText}>{getPaymentStatusText(tenant.currentMonthRentStatus)}</Text>
+          </View>
+        </View>
+
+        {/* Security Deposit Status */}
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>Security Deposit:</Text>
+          <View style={[styles.paymentStatusBadge, { backgroundColor: tenant.depositPaid ? colors.success : colors.error }]}>
+            <Text style={styles.paymentStatusText}>{tenant.depositPaid ? 'Paid' : 'Pending'}</Text>
+          </View>
+        </View>
+
+        {/* Outstanding Amount */}
+        {tenant.outstandingAmount > 0 && (
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentLabel}>Outstanding:</Text>
+            <Text style={[styles.paymentAmount, { color: colors.error }]}>₹{tenant.outstandingAmount}</Text>
+          </View>
+        )}
+
+        {/* Last Payment Date */}
+        {tenant.lastPaymentDate && (
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentLabel}>Last Payment:</Text>
+            <Text style={styles.paymentDate}>{tenant.lastPaymentDate.toLocaleDateString()}</Text>
+          </View>
+        )}
+
+        {/* Late Payments Count */}
+        {tenant.latePayments > 0 && (
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentLabel}>Late Payments:</Text>
+            <Text style={[styles.paymentCount, { color: colors.error }]}>{tenant.latePayments}</Text>
+          </View>
+        )}
+
+        {/* Deposit Paid Date */}
+        {tenant.depositPaid && tenant.depositPaidAt && (
+          <View style={styles.paymentRow}>
+            <Text style={styles.paymentLabel}>Deposit Paid:</Text>
+            <Text style={styles.paymentDate}>{tenant.depositPaidAt.toLocaleDateString()}</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 
@@ -879,6 +995,33 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
         <Text style={styles.statText}>
           💰 Rent: ₹{unit.rent}/month | Deposit: ₹{unit.deposit}
         </Text>
+        {unit.currentTenants.length > 0 && (
+          <View style={styles.unitPaymentSummary}>
+            <Text style={styles.paymentSummaryTitle}>Payment Summary</Text>
+            {(() => {
+              const totalOutstanding = unit.currentTenants.reduce((sum, tenant) => sum + tenant.outstandingAmount, 0);
+              const paidDeposits = unit.currentTenants.filter(tenant => tenant.depositPaid).length;
+              const totalDeposits = unit.currentTenants.length;
+              const overdueRents = unit.currentTenants.filter(tenant => tenant.currentMonthRentStatus === PaymentStatus.OVERDUE).length;
+              
+              return (
+                <>
+                  <Text style={styles.statText}>
+                    💳 Deposits: {paidDeposits}/{totalDeposits} paid
+                  </Text>
+                  <Text style={styles.statText}>
+                    📊 Rent Status: {overdueRents > 0 ? `${overdueRents} overdue` : 'All up to date'}
+                  </Text>
+                  {totalOutstanding > 0 && (
+                    <Text style={[styles.statText, { color: colors.error }]}>
+                      ⚠️ Outstanding: ₹{totalOutstanding}
+                    </Text>
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        )}
       </View>
 
       {/* Only show tenant details when this specific unit is selected */}
@@ -984,12 +1127,6 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
           {selectedFloorId && selectedCategory && !selectedUnitId && `${selectedCategory.replace('_', ' ').toUpperCase()} - ${selectedFloor?.floorName}`}
           {selectedUnitId && `Room ${selectedUnit?.unitNumber}`}
         </Text>
-        <TouchableOpacity 
-          style={styles.debugButton}
-          onPress={debugShowAllTenants}
-        >
-          <Text style={styles.debugButtonText}>Debug</Text>
-        </TouchableOpacity>
              </View>
 
        {/* Content */}
@@ -1072,6 +1209,33 @@ const RoomManagementScreen: React.FC<RoomManagementScreenProps> = ({ navigation,
                    <Text style={styles.statText}>
                      💰 Rent: ₹{selectedUnit.rent}/month | Deposit: ₹{selectedUnit.deposit}
                    </Text>
+                   {selectedUnit.currentTenants.length > 0 && (
+                     <View style={styles.unitPaymentSummary}>
+                       <Text style={styles.paymentSummaryTitle}>Payment Summary</Text>
+                       {(() => {
+                         const totalOutstanding = selectedUnit.currentTenants.reduce((sum, tenant) => sum + tenant.outstandingAmount, 0);
+                         const paidDeposits = selectedUnit.currentTenants.filter(tenant => tenant.depositPaid).length;
+                         const totalDeposits = selectedUnit.currentTenants.length;
+                         const overdueRents = selectedUnit.currentTenants.filter(tenant => tenant.currentMonthRentStatus === PaymentStatus.OVERDUE).length;
+                         
+                         return (
+                           <>
+                             <Text style={styles.statText}>
+                               💳 Deposits: {paidDeposits}/{totalDeposits} paid
+                             </Text>
+                             <Text style={styles.statText}>
+                               📊 Rent Status: {overdueRents > 0 ? `${overdueRents} overdue` : 'All up to date'}
+                             </Text>
+                             {totalOutstanding > 0 && (
+                               <Text style={[styles.statText, { color: colors.error }]}>
+                                 ⚠️ Outstanding: ₹{totalOutstanding}
+                               </Text>
+                             )}
+                           </>
+                         );
+                       })()}
+                     </View>
+                   )}
                  </View>
 
                  {selectedUnit.currentTenants.length > 0 && (
@@ -1304,6 +1468,63 @@ const styles = StyleSheet.create({
     fontSize: fonts.sm,
     color: colors.textSecondary,
   },
+  paymentInfoSection: {
+    marginTop: dimensions.spacing.sm,
+    paddingTop: dimensions.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+  },
+  paymentSectionTitle: {
+    fontSize: fonts.sm,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.sm,
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: dimensions.spacing.xs,
+  },
+  paymentLabel: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  paymentStatusBadge: {
+    paddingHorizontal: dimensions.spacing.sm,
+    paddingVertical: dimensions.spacing.xs,
+    borderRadius: dimensions.borderRadius.sm,
+  },
+  paymentStatusText: {
+    fontSize: fonts.xs,
+    fontWeight: '500',
+    color: colors.white,
+  },
+  paymentAmount: {
+    fontSize: fonts.sm,
+    fontWeight: '600',
+  },
+  paymentDate: {
+    fontSize: fonts.sm,
+    color: colors.textSecondary,
+  },
+  paymentCount: {
+    fontSize: fonts.sm,
+    fontWeight: '600',
+  },
+  unitPaymentSummary: {
+    marginTop: dimensions.spacing.sm,
+    paddingTop: dimensions.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+  },
+  paymentSummaryTitle: {
+    fontSize: fonts.sm,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: dimensions.spacing.xs,
+  },
   unitWithTenantsCard: {
     backgroundColor: colors.white,
     borderRadius: dimensions.borderRadius.md,
@@ -1380,17 +1601,6 @@ const styles = StyleSheet.create({
      addFirstUnitButtonText: {
      color: colors.white,
      fontSize: fonts.md,
-     fontWeight: '500',
-   },
-   debugButton: {
-     backgroundColor: colors.warning,
-     paddingHorizontal: dimensions.spacing.sm,
-     paddingVertical: dimensions.spacing.xs,
-     borderRadius: dimensions.borderRadius.sm,
-   },
-   debugButtonText: {
-     color: colors.white,
-     fontSize: fonts.xs,
      fontWeight: '500',
    },
  });

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { firestoreService } from '../../services/firestore';
@@ -267,6 +268,7 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
 
       <ScrollView 
         style={styles.content} 
+        contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -470,30 +472,47 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
         <View style={styles.lifeSection}>
           <Text style={styles.sectionTitle}>Life in Property</Text>
           
-          <View style={styles.lifeCards}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.lifeCardsContainer}
+            style={styles.lifeCardsScrollView}
+          >
             <TouchableOpacity style={styles.lifeCard} onPress={handleReportIssue}>
-              <Text style={styles.lifeCardTitle}>Facing Issues?</Text>
-              <Text style={styles.lifeCardSubtitle}>Register your issues in one click</Text>
+              <View style={styles.lifeCardIcon}>
+                <Icon name="construct-outline" size={24} color="#4F46E5" />
+              </View>
+              <Text style={styles.lifeCardTitle}>Report Issue</Text>
+              <Text style={styles.lifeCardSubtitle}>Quick issue reporting</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.lifeCard} onPress={handleAttendance}>
+              <View style={styles.lifeCardIcon}>
+                <Icon name="calendar-outline" size={24} color="#4F46E5" />
+              </View>
               <Text style={styles.lifeCardTitle}>Attendance</Text>
-              <Text style={styles.lifeCardSubtitle}>Mark your attendance for leave requests</Text>
+              <Text style={styles.lifeCardSubtitle}>Mark your presence</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.lifeCard} onPress={handleFindProperties}>
+              <View style={styles.lifeCardIcon}>
+                <Icon name="home-outline" size={24} color="#4F46E5" />
+              </View>
               <Text style={styles.lifeCardTitle}>Find Properties</Text>
-              <Text style={styles.lifeCardSubtitle}>Browse and apply to available properties</Text>
+              <Text style={styles.lifeCardSubtitle}>Browse available</Text>
             </TouchableOpacity>
-          </View>
+
+            <TouchableOpacity style={styles.lifeCard} onPress={handleHelp}>
+              <View style={styles.lifeCardIcon}>
+                <Icon name="chatbubble-outline" size={24} color="#4F46E5" />
+              </View>
+              <Text style={styles.lifeCardTitle}>Help & Support</Text>
+              <Text style={styles.lifeCardSubtitle}>Get assistance</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </ScrollView>
 
-      {/* Floating Help Button */}
-      <TouchableOpacity style={styles.helpButton} onPress={handleHelp}>
-        <Text style={styles.helpIcon}>💬</Text>
-        <Text style={styles.helpText}>Help</Text>
-      </TouchableOpacity>
 
       {/* Removed cleanup button - no longer needed */}
     </SafeAreaView>
@@ -848,56 +867,49 @@ const styles = StyleSheet.create({
     marginBottom: dimensions.spacing.xs,
   },
   lifeSection: {
-    marginBottom: dimensions.spacing.xl,
+    marginBottom: dimensions.spacing.md,
+    paddingBottom: dimensions.spacing.sm,
   },
   lifeCards: {
     flexDirection: 'row',
     gap: dimensions.spacing.md,
   },
   lifeCard: {
-    flex: 1,
+    width: 140,
     backgroundColor: colors.white,
     padding: dimensions.spacing.lg,
-    borderRadius: dimensions.borderRadius.md,
+    borderRadius: dimensions.borderRadius.lg,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
+    marginRight: dimensions.spacing.sm,
+  },
+  lifeCardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: dimensions.spacing.md,
   },
   lifeCardTitle: {
     fontSize: fonts.md,
     fontWeight: '600',
     color: colors.textPrimary,
     marginBottom: dimensions.spacing.xs,
+    textAlign: 'center',
   },
   lifeCardSubtitle: {
     fontSize: fonts.sm,
     color: colors.textSecondary,
-  },
-  helpButton: {
-    position: 'absolute',
-    bottom: dimensions.spacing.xl,
-    right: dimensions.spacing.xl,
-    backgroundColor: colors.success,
-    paddingHorizontal: dimensions.spacing.lg,
-    paddingVertical: dimensions.spacing.md,
-    borderRadius: dimensions.borderRadius.md,
-    alignItems: 'center',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  helpIcon: {
-    fontSize: 20,
-    marginBottom: dimensions.spacing.xs,
-  },
-  helpText: {
-    fontSize: fonts.sm,
-    color: colors.white,
-    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 16,
   },
   // Removed cleanup button styles - no longer needed
 });

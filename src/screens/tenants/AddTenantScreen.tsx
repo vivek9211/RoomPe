@@ -100,6 +100,17 @@ const getDefaultDepositForUnitType = (unitType: string): number => {
   return getDefaultRentForUnitType(unitType) * 2;
 };
 
+// Helper function to determine if a room is available for new tenant assignment
+const isRoomAvailableForTenant = (room: any, occupiedCount: number): boolean => {
+  // For BHK, RK, Studio apartments: only available if completely unoccupied (0 tenants)
+  if (room.unitType && ['bhk_1', 'bhk_2', 'bhk_3', 'bhk_4', 'bhk_5', 'bhk_6', 'rk', 'studio_apartment'].includes(room.unitType)) {
+    return occupiedCount === 0;
+  }
+  
+  // For regular rooms (sharing types): available if not fully occupied
+  return occupiedCount < room.capacity;
+};
+
 const AddTenantScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { createTenant, loading, error, clearError } = useTenants();
@@ -374,13 +385,25 @@ const AddTenantScreen: React.FC = () => {
           }
         });
         
-        // Update occupancy based on actual tenant data
+        // Update occupancy based on actual tenant data and filter occupied rooms
         try {
           const allTenants = await tenantApiService.getTenantsByProperty(propertyId);
-          rooms.forEach(room => {
+          
+          // Filter rooms based on occupancy logic
+          const availableRooms = rooms.filter(room => {
             const roomTenants = allTenants.filter(tenant => tenant.roomId === room.roomNumber);
             room.occupied = roomTenants.length;
+            
+            const isAvailable = isRoomAvailableForTenant(room, room.occupied);
+            console.log(`Room ${room.roomNumber} (${room.type}): ${room.occupied}/${room.capacity} occupied, Available: ${isAvailable}`);
+            
+            return isAvailable;
           });
+          
+          console.log(`Total rooms: ${rooms.length}, Available rooms: ${availableRooms.length}`);
+          console.log('Available rooms after filtering:', availableRooms);
+          setAvailableRooms(availableRooms);
+          return; // Exit early since we've set the filtered rooms
         } catch (error) {
           console.error('Error loading tenant occupancy:', error);
         }
@@ -390,7 +413,7 @@ const AddTenantScreen: React.FC = () => {
       setAvailableRooms(rooms);
     } catch (error) {
       console.error('Error loading rooms:', error);
-      // Fallback to default rooms if there's an error
+      // Fallback to default rooms if there's an error (all unoccupied for testing)
       setAvailableRooms([
         { id: '101', name: 'Room 101 (Ground Floor)', roomNumber: '101', type: 'Single Room', unitType: 'room', sharingType: 'single', capacity: 1, occupied: 0, floorName: 'Ground Floor', rent: 5000, deposit: 10000 },
         { id: '102', name: 'Room 102 (Ground Floor)', roomNumber: '102', type: 'Double Sharing', unitType: 'room', sharingType: 'double', capacity: 2, occupied: 0, floorName: 'Ground Floor', rent: 4000, deposit: 8000 },
@@ -507,7 +530,7 @@ const AddTenantScreen: React.FC = () => {
                   {title === 'Select Approved Tenant' 
                     ? 'No approved tenants available. Only tenants with approved applications and no room assignments are shown.'
                     : title === 'Select Room'
-                    ? 'No available rooms found for this property.'
+                    ? 'No available rooms found for this property. All rooms are currently occupied or fully booked.'
                     : 'No items available'
                   }
                 </Text>
@@ -534,6 +557,7 @@ const AddTenantScreen: React.FC = () => {
                          {item.type} • {item.occupied}/{item.capacity} occupied
                          {item.floorName && ` • ${item.floorName}`}
                          {item.rent > 0 && ` • ₹${item.rent.toLocaleString()}/month`}
+                         {item.occupied === 0 && ' • Available'}
                        </Text>
                      ) : (
                       // Show user information

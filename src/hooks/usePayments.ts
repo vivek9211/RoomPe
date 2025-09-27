@@ -40,25 +40,156 @@ export const usePayments = () => {
     }
   }, [userProfile?.uid]);
 
-  // Load all payments for the current user
-  const loadPayments = useCallback(async (filters?: PaymentFilters) => {
-    if (!userProfile?.uid) return;
+  // Get tenant deposit information
+  const getTenantDepositInfo = useCallback(async () => {
+    if (!userProfile?.uid) return null;
 
     try {
-    setLoading(true);
-    setError(null);
-      
-      const userPayments = await paymentService.getTenantPayments(userProfile.uid, filters);
-      setPayments(userPayments);
+      const tenantData = await paymentService.getTenantByUserId(userProfile.uid);
+      if (!tenantData) return null;
+
+      return {
+        depositAmount: tenantData.deposit,
+        depositPaid: tenantData.depositPaid,
+        depositPaidAt: tenantData.depositPaidAt,
+        propertyId: tenantData.propertyId,
+        roomId: tenantData.roomId,
+      };
+    } catch (error) {
+      console.error('Error getting tenant deposit info:', error);
+      return null;
+    }
+  }, [userProfile?.uid]);
+
+  // Load payments - if user is owner, load all; if tenant, load own
+  const loadPayments = useCallback(async (filters?: PaymentFilters) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      let paymentsData: Payment[] = [];
+      const role = (userProfile as any)?.role;
+      if (role === 'owner' || role === 'admin' || role === 'manager') {
+        paymentsData = await paymentService.getAllPayments(filters);
+      } else if (userProfile?.uid) {
+        paymentsData = await paymentService.getTenantPayments(userProfile.uid, filters);
+      }
+
+      setPayments(paymentsData);
     } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch payments';
+      setError(errorMessage);
       console.error('Error loading payments:', err);
-      // Don't set error for payments loading failure, just set empty array
-      // This prevents the UI from showing errors when there are no payments yet
-      setPayments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [userProfile]);
+
+  // Create deposit payment
+  const createDepositPayment = useCallback(async (propertyId: string, roomId: string, depositAmount: number): Promise<string> => {
+    if (!userProfile?.uid) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get tenant data first
+      const tenantData = await paymentService.getTenantByUserId(userProfile.uid);
+      if (!tenantData) {
+        throw new Error('Tenant not found');
+      }
+
+      const paymentId = await paymentService.createDepositPayment(
+        tenantData.id,
+        propertyId,
+        roomId,
+        depositAmount
+      );
+
+      // Refresh payments list
+      await loadPayments();
+      
+      return paymentId;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create deposit payment';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [userProfile?.uid, loadPayments]);
+
+  // Process deposit payment
+  const processDepositPayment = useCallback(async (paymentId: string, propertyId: string): Promise<{
+    orderId: string;
+    amount: number;
+    keyId: string;
+  }> => {
+    if (!userProfile?.uid) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const result = await paymentService.processDepositPayment(paymentId, userProfile.uid, propertyId);
+      return result;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to process deposit payment';
+      setError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setLoading(false);
     }
   }, [userProfile?.uid]);
+
+  // Verify deposit payment
+  const verifyDepositPayment = useCallback(async (
+    paymentId: string,
+    razorpayPaymentId: string,
+    razorpayOrderId: string,
+    razorpaySignature: string
+  ): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      await paymentService.verifyDepositPayment(
+        paymentId,
+        razorpayPaymentId,
+        razorpayOrderId,
+        razorpaySignature
+      );
+
+      // Refresh payments list
+      await loadPayments();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to verify deposit payment';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadPayments]);
+
+
+  // Manually update tenant deposit status (fallback for verification failures)
+  const updateTenantDepositStatus = useCallback(async (tenantId: string, depositPaid: boolean = true): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      await paymentService.updateTenantDepositStatus(tenantId, depositPaid);
+
+      // Refresh payments list
+      await loadPayments();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to update tenant deposit status';
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadPayments]);
 
   // Load current month's rent from actual payment records
   const loadCurrentMonthRent = useCallback(async () => {
@@ -387,6 +518,13 @@ export const usePayments = () => {
     syncPaymentStatus,
     syncAllPayments,
     cleanupDuplicatePayments,
+    
+    // Deposit payment actions
+    createDepositPayment,
+    processDepositPayment,
+    verifyDepositPayment,
+    updateTenantDepositStatus,
+    getTenantDepositInfo,
     
     // Computed values
     totalOutstanding: getTotalOutstanding(),

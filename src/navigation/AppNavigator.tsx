@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../contexts/AuthContext';
 
 // Auth Screens
@@ -54,6 +55,7 @@ import PaymentListScreen from '../screens/payments/PaymentListScreen';
 import PaymentDetailScreen from '../screens/payments/PaymentDetailScreen';
 import AddPaymentScreen from '../screens/payments/AddPaymentScreen';
 import TenantPaymentScreen from '../screens/payments/TenantPaymentScreen';
+import DepositPaymentScreen from '../screens/payments/DepositPaymentScreen';
 
 // Maintenance Screens
 import MaintenanceListScreen from '../screens/maintenance/MaintenanceListScreen';
@@ -86,14 +88,30 @@ const OwnerTabNavigator = () => {
     <Tab.Navigator
       screenOptions={{
         tabBarActiveTintColor: '#4F46E5',
-        tabBarInactiveTintColor: '#6B7280',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
+          borderTopWidth: 0,
           height: 60 + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: 8,
+          paddingHorizontal: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          elevation: 12,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+          marginTop: 2,
+          letterSpacing: 0.1,
+        },
+        tabBarIconStyle: {
+          marginTop: 0,
         },
         headerShown: false,
       }}
@@ -103,8 +121,12 @@ const OwnerTabNavigator = () => {
         component={OwnerDashboardScreen}
         options={{
           tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>🏠</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'home' : 'home-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -113,8 +135,12 @@ const OwnerTabNavigator = () => {
         component={TenantListScreen}
         options={{
           tabBarLabel: 'Tenants',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>👥</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'people' : 'people-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -123,8 +149,12 @@ const OwnerTabNavigator = () => {
         component={PaymentListScreen}
         options={{
           tabBarLabel: 'Payments',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>💰</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'card' : 'card-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -133,8 +163,12 @@ const OwnerTabNavigator = () => {
         component={AnalyticsScreen}
         options={{
           tabBarLabel: 'Analytics',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>📊</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'analytics' : 'analytics-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -143,8 +177,12 @@ const OwnerTabNavigator = () => {
         component={OwnerSettingsScreen}
         options={{
           tabBarLabel: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>⚙️</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'settings' : 'settings-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -160,14 +198,30 @@ const TenantTabNavigator = () => {
     <Tab.Navigator
       screenOptions={{
         tabBarActiveTintColor: '#4F46E5',
-        tabBarInactiveTintColor: '#6B7280',
+        tabBarInactiveTintColor: '#9CA3AF',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
-          borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
+          borderTopWidth: 0,
           height: 60 + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: 8,
+          paddingHorizontal: 12,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          elevation: 12,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+          marginTop: 2,
+          letterSpacing: 0.1,
+        },
+        tabBarIconStyle: {
+          marginTop: 0,
         },
         headerShown: false,
       }}
@@ -177,8 +231,12 @@ const TenantTabNavigator = () => {
         component={TenantDashboardScreen}
         options={{
           tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>🏠</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'home' : 'home-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -187,8 +245,12 @@ const TenantTabNavigator = () => {
         component={TenantPaymentScreen}
         options={{
           tabBarLabel: 'Payments',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>💰</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'card' : 'card-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -197,8 +259,12 @@ const TenantTabNavigator = () => {
         component={MaintenanceListScreen}
         options={{
           tabBarLabel: 'Maintenance',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>🔧</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'construct' : 'construct-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -207,8 +273,12 @@ const TenantTabNavigator = () => {
         component={TenantSettingsScreen}
         options={{
           tabBarLabel: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ color, fontSize: size }}>⚙️</Text>
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'settings' : 'settings-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
           ),
         }}
       />
@@ -281,6 +351,7 @@ const AppNavigator = () => {
             <Stack.Screen name="TenantTabs" component={TenantTabNavigator} />
             <Stack.Screen name="AssignedPropertyDetail" component={AssignedPropertyDetailScreen} />
             <Stack.Screen name="TenantPayments" component={TenantPaymentScreen} />
+            <Stack.Screen name="DepositPayment" component={DepositPaymentScreen} />
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
