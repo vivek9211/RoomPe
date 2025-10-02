@@ -137,6 +137,11 @@ export class PaymentService {
 
       await firestore().collection(this.collection).doc(paymentId).update(updateData);
       console.log('Payment status updated manually:', { paymentId, status });
+
+      // Send notification to property owner when payment is completed
+      if (status === PaymentStatus.PAID) {
+        await this.sendPaymentNotificationToOwner(paymentId);
+      }
     } catch (error: any) {
       console.error('Error updating payment status:', error);
       throw new Error('Failed to update payment status');
@@ -483,6 +488,11 @@ export class PaymentService {
       }
 
       await firestore().collection(this.collection).doc(paymentId).update(updateFields);
+
+      // Send notification to property owner when payment is completed
+      if (status === PaymentStatus.PAID) {
+        await this.sendPaymentNotificationToOwner(paymentId);
+      }
     } catch (error) {
       console.error('Error updating payment status:', error);
       throw new Error('Failed to update payment status');
@@ -1224,6 +1234,96 @@ export class PaymentService {
     } catch (error) {
       console.error('Error getting tenant-based payment stats:', error);
       throw new Error('Failed to get tenant-based payment stats');
+    }
+  }
+
+  /**
+   * Get tenant by ID
+   */
+  private async getTenantById(tenantId: string): Promise<any> {
+    try {
+      const tenantDoc = await firestore().collection('tenants').doc(tenantId).get();
+      if (tenantDoc.exists) {
+        return { id: tenantDoc.id, ...tenantDoc.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting tenant:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get property by ID
+   */
+  private async getPropertyById(propertyId: string): Promise<any> {
+    try {
+      const propertyDoc = await firestore().collection('properties').doc(propertyId).get();
+      if (propertyDoc.exists) {
+        return { id: propertyDoc.id, ...propertyDoc.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting property:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Send payment notification to property owner
+   */
+  private async sendPaymentNotificationToOwner(paymentId: string): Promise<void> {
+    try {
+      // Get payment details
+      const paymentDoc = await firestore().collection(this.collection).doc(paymentId).get();
+      if (!paymentDoc.exists) {
+        console.error('Payment not found for notification:', paymentId);
+        return;
+      }
+
+      const payment = paymentDoc.data() as Payment;
+
+      // Get tenant details
+      const tenantData = await this.getTenantById(payment.tenantId);
+      if (!tenantData) {
+        console.error('Tenant not found for payment notification:', payment.tenantId);
+        return;
+      }
+
+      // Get property details
+      const propertyData = await this.getPropertyById(payment.propertyId);
+      if (!propertyData) {
+        console.error('Property not found for payment notification:', payment.propertyId);
+        return;
+      }
+
+      // Import NotificationService dynamically to avoid circular imports
+      const { NotificationService } = await import('../notifications/notificationService');
+      const { NotificationType, NotificationPriority } = await import('../../types/notification.types');
+
+      // Create notification for property owner
+      await NotificationService.createNotification({
+        userId: propertyData.ownerId,
+        title: 'Payment Received',
+        message: `${tenantData.name} has paid ₹${payment.amount} for ${payment.month} rent at ${propertyData.name}`,
+        type: NotificationType.PAYMENT_CONFIRMATION,
+        priority: NotificationPriority.MEDIUM,
+        metadata: {
+          paymentId: paymentId,
+          tenantId: payment.tenantId,
+          propertyId: payment.propertyId,
+          roomId: payment.roomId,
+          amount: payment.amount,
+          month: payment.month,
+          tenantName: tenantData.name,
+          propertyName: propertyData.name,
+        },
+      });
+
+      console.log('Payment notification sent to owner:', propertyData.ownerId);
+    } catch (error) {
+      console.error('Error sending payment notification to owner:', error);
+      // Don't throw error as this is a non-critical operation
     }
   }
 }

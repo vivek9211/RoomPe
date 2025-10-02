@@ -45,8 +45,26 @@ export class NotificationService {
         throw new Error('User not authenticated');
       }
 
+      // Also clean metadata if it exists
+      let cleanMetadata = {
+        isAutomated: true,
+        source: 'system',
+        createdBy: currentUser.uid,
+      };
+      
+      if (notificationData.metadata) {
+        const filteredMetadata = Object.fromEntries(
+          Object.entries(notificationData.metadata).filter(([_, value]) => value !== undefined)
+        );
+        cleanMetadata = { ...cleanMetadata, ...filteredMetadata };
+      }
+
       const notification: Omit<Notification, 'id'> = {
-        ...notificationData,
+        userId: notificationData.userId,
+        type: notificationData.type,
+        title: notificationData.title,
+        message: notificationData.message,
+        priority: notificationData.priority,
         status: NotificationStatus.PENDING,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
@@ -55,12 +73,7 @@ export class NotificationService {
           retryCount: 0,
           maxRetries: 3,
         },
-        metadata: {
-          isAutomated: true,
-          source: 'system',
-          ...notificationData.metadata,
-          createdBy: currentUser.uid,
-        } as any,
+        metadata: cleanMetadata as any,
       };
 
       const docRef = await firestore()

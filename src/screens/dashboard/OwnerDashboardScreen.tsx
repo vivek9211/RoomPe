@@ -115,13 +115,16 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
     }
   }, [userProfile?.uid]);
 
-  // Refresh notification count when screen is focused
+  // Refresh notification count and payment summary when screen is focused
   useFocusEffect(
     React.useCallback(() => {
       if (userProfile?.uid) {
         refreshUnreadCount();
+        if (properties.length > 0) {
+          loadPaymentSummary();
+        }
       }
-    }, [refreshUnreadCount, userProfile?.uid])
+    }, [refreshUnreadCount, userProfile?.uid, properties.length])
   );
 
   useEffect(() => {
