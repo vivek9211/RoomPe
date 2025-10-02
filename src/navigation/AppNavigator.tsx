@@ -65,8 +65,8 @@ import AddMaintenanceScreen from '../screens/maintenance/AddMaintenanceScreen';
 // Complaint Screens
 import { 
   SubmitComplaintScreen, 
-  ComplaintListScreen, 
-  ComplaintDetailScreen 
+  ComplaintListScreen,
+  ComplaintManagementScreen 
 } from '../screens/complaints';
 
 // Reports Screens
@@ -365,7 +365,7 @@ const AppNavigator = () => {
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
             <Stack.Screen name="ComplaintList" component={ComplaintListScreen} />
-            <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} />
+            <Stack.Screen name="ComplaintManagement" component={ComplaintManagementScreen} />
             <Stack.Screen name="Reports" component={ReportsScreen} />
             <Stack.Screen name="FinancialReport" component={FinancialReportScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
@@ -383,7 +383,6 @@ const AppNavigator = () => {
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
             <Stack.Screen name="SubmitComplaint" component={SubmitComplaintScreen} />
-            <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} />
 
             <Stack.Screen name="AssignProperty" component={AssignPropertyScreen} />
             <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />

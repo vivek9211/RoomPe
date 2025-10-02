@@ -35,8 +35,11 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       const unreadNotifications = notifications.filter(n => n.status !== NotificationStatus.READ);
       setUnreadCount(unreadNotifications.length);
     } catch (error: any) {
-      // Only log error if user is still authenticated (avoid logout errors)
-      if (user?.uid && error?.code !== 'firestore/permission-denied') {
+      // Handle permission errors gracefully (user might be logged out)
+      if (error?.code === 'firestore/permission-denied' || error?.code === 'permission-denied') {
+        console.log('Permission denied for notifications - user likely logged out');
+      } else if (user?.uid) {
+        // Only log other errors if user is still authenticated
         console.error('Error fetching unread notification count:', error);
       }
       setUnreadCount(0);

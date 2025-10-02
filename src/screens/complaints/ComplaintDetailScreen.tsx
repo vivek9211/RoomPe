@@ -53,7 +53,7 @@ const ComplaintDetailScreen: React.FC<ComplaintDetailScreenProps> = ({ navigatio
 
   // Get status color
   const getStatusColor = (status: ComplaintStatus) => {
-    const colors = {
+    const statusColors = {
       [ComplaintStatus.OPEN]: colors.warning,
       [ComplaintStatus.IN_PROGRESS]: colors.primary,
       [ComplaintStatus.RESOLVED]: colors.success,
@@ -61,24 +61,24 @@ const ComplaintDetailScreen: React.FC<ComplaintDetailScreenProps> = ({ navigatio
       [ComplaintStatus.CANCELLED]: colors.error,
       [ComplaintStatus.ESCALATED]: colors.error,
     };
-    return colors[status] || colors.textSecondary;
+    return statusColors[status] || colors.textSecondary;
   };
 
   // Get priority color
   const getPriorityColor = (priority: ComplaintPriority) => {
-    const colors = {
+    const priorityColors = {
       [ComplaintPriority.LOW]: colors.success,
       [ComplaintPriority.MEDIUM]: colors.warning,
       [ComplaintPriority.HIGH]: colors.error,
       [ComplaintPriority.URGENT]: '#FF0000',
       [ComplaintPriority.CRITICAL]: '#8B0000',
     };
-    return colors[priority] || colors.warning;
+    return priorityColors[priority] || colors.warning;
   };
 
   // Get category color
   const getCategoryColor = (category: ComplaintCategory) => {
-    const colors = {
+    const categoryColors = {
       [ComplaintCategory.ELECTRICAL]: '#FF6B6B',
       [ComplaintCategory.PLUMBING]: '#4ECDC4',
       [ComplaintCategory.WATER]: '#45B7D1',
@@ -91,7 +91,7 @@ const ComplaintDetailScreen: React.FC<ComplaintDetailScreenProps> = ({ navigatio
       [ComplaintCategory.NOISE]: '#85C1E9',
       [ComplaintCategory.OTHER]: '#A9A9A9',
     };
-    return colors[category] || '#A9A9A9';
+    return categoryColors[category] || '#A9A9A9';
   };
 
   // Format date

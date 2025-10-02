@@ -619,12 +619,14 @@ export class NotificationService {
       const currentUser = auth().currentUser;
       
       if (!currentUser) {
-        throw new Error('User not authenticated');
+        console.log('No authenticated user, returning empty notifications');
+        return [];
       }
 
       // Verify the requesting user matches the userId parameter (security check)
       if (currentUser.uid !== userId) {
-        throw new Error('Unauthorized access to notifications');
+        console.log('Unauthorized access attempt to notifications');
+        return [];
       }
 
       let snapshot;
@@ -662,14 +664,13 @@ export class NotificationService {
 
       return notifications;
     } catch (error: any) {
-      console.error('Error getting user notifications:', error);
-      
-      // Re-throw permission errors so they can be handled by the UI
+      // Handle permission errors gracefully (user might be logged out)
       if (error?.code === 'firestore/permission-denied' || error?.code === 'permission-denied') {
-        throw error;
+        console.log('Permission denied for notifications - user likely logged out');
+        return [];
       }
       
-      // For other errors, return empty array but log the error
+      console.error('Error getting user notifications:', error);
       return [];
     }
   }

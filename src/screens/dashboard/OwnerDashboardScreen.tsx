@@ -277,6 +277,9 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
         // Navigate to announcement screen
         Alert.alert('Coming Soon', 'Announcement feature will be available soon');
         break;
+      case 'manageComplaints':
+        navigation.navigate('ComplaintManagement');
+        break;
     }
   };
 
@@ -735,12 +738,34 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
                 <Text style={styles.actionLabel}>Send Announcement</Text>
               </TouchableOpacity>
             </Animated.View>
+            
+            {/* Manage Complaints */}
+            <Animated.View
+              style={{
+                transform: [{
+                  scale: scrollY.interpolate({
+                    inputRange: [600, 700],
+                    outputRange: [1, 1.05],
+                    extrapolate: 'clamp',
+                  }),
+                }],
+              }}
+            >
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={() => handleQuickAction('manageComplaints')}
+                activeOpacity={0.7}
+              >
+                <Icon name="warning-outline" size={24} color={colors.primary} />
+                <Text style={styles.actionLabel}>Manage Complaints</Text>
+              </TouchableOpacity>
+            </Animated.View>
           </ScrollView>
           
           {/* Scroll Indicator */}
           <View style={styles.scrollIndicator}>
             <View style={styles.scrollDots}>
-              {[0, 1, 2, 3, 4, 5].map((index) => (
+              {[0, 1, 2, 3, 4, 5, 6].map((index) => (
                 <Animated.View
                   key={index}
                   style={[
