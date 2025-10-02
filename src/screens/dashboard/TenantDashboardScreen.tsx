@@ -173,9 +173,6 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     navigation.navigate('AssignProperty');
   };
 
-  const handleNotifications = () => {
-    Alert.alert('Notifications', 'View your notifications');
-  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -268,9 +265,9 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
         </View>
         
                  <View style={styles.actionIcons}>
-           <TouchableOpacity style={styles.notificationIcon} onPress={handleNotifications}>
+           <TouchableOpacity style={styles.notificationIcon} onPress={() => navigation.navigate('Notifications')}>
              <NotificationBadge count={unreadCount}>
-               <Text style={styles.iconText}>🔔</Text>
+               <Icon name="notifications-outline" size={20} color={colors.white} />
              </NotificationBadge>
            </TouchableOpacity>
          </View>
@@ -588,16 +585,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 18,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  iconText: {
-    fontSize: 20,
-    color: colors.white,
   },
   content: {
     flex: 1,

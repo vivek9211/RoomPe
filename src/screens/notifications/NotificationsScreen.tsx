@@ -245,15 +245,19 @@ const NotificationsScreen: React.FC<NotificationsScreenProps> = ({ navigation })
   };
 
   useEffect(() => {
-    loadNotifications();
-    // Clear the badge when notification screen is opened
-    markAllAsViewed();
+    if (user?.uid) {
+      loadNotifications();
+      // Clear the badge when notification screen is opened
+      markAllAsViewed();
+    }
   }, [user?.uid]);
 
   // Refresh unread count when notifications are updated
   useEffect(() => {
-    refreshUnreadCount();
-  }, [notifications]);
+    if (user?.uid) {
+      refreshUnreadCount();
+    }
+  }, [notifications, user?.uid]);
 
   const unreadCount = notifications.filter(n => n.status !== NotificationStatus.READ).length;
 

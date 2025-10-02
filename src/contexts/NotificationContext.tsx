@@ -25,6 +25,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const refreshUnreadCount = async () => {
     if (!user?.uid) {
       setUnreadCount(0);
+      setLoading(false);
       return;
     }
 
@@ -33,8 +34,11 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       const notifications = await NotificationService.getUserNotifications(user.uid, 100);
       const unreadNotifications = notifications.filter(n => n.status !== NotificationStatus.READ);
       setUnreadCount(unreadNotifications.length);
-    } catch (error) {
-      console.error('Error fetching unread notification count:', error);
+    } catch (error: any) {
+      // Only log error if user is still authenticated (avoid logout errors)
+      if (user?.uid && error?.code !== 'firestore/permission-denied') {
+        console.error('Error fetching unread notification count:', error);
+      }
       setUnreadCount(0);
     } finally {
       setLoading(false);
@@ -48,19 +52,39 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   // Refresh count when user changes
   useEffect(() => {
-    refreshUnreadCount();
+    if (user?.uid) {
+      refreshUnreadCount();
+    } else {
+      // Clear count and stop loading when user logs out
+      setUnreadCount(0);
+      setLoading(false);
+    }
   }, [user?.uid]);
 
-  // Set up periodic refresh (every 30 seconds)
+  // Set up periodic refresh (every 30 seconds) only when user is authenticated
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      return;
+    }
 
     const interval = setInterval(() => {
-      refreshUnreadCount();
+      // Double-check user is still authenticated before refreshing
+      if (user?.uid) {
+        refreshUnreadCount();
+      }
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
   }, [user?.uid]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear state when provider unmounts
+      setUnreadCount(0);
+      setLoading(false);
+    };
+  }, []);
 
   const value: NotificationContextType = {
     unreadCount,

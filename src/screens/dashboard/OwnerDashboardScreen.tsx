@@ -118,8 +118,10 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
   // Refresh notification count when screen is focused
   useFocusEffect(
     React.useCallback(() => {
-      refreshUnreadCount();
-    }, [refreshUnreadCount])
+      if (userProfile?.uid) {
+        refreshUnreadCount();
+      }
+    }, [refreshUnreadCount, userProfile?.uid])
   );
 
   useEffect(() => {
