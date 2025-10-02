@@ -291,7 +291,7 @@ export class ComplaintApiService {
       // Send notification
       await NotificationService.createNotification({
         userId: property.ownerId,
-        type: NotificationType.MAINTENANCE_REQUEST,
+        type: NotificationType.COMPLAINT_FILED,
         title: 'New Complaint Received',
         message: `${tenant.name || 'Tenant'} has submitted a ${complaint.category} complaint for Room ${roomNumber}: ${complaint.title}`,
         priority: complaint.priority === ComplaintPriority.CRITICAL || complaint.priority === ComplaintPriority.URGENT
@@ -302,9 +302,11 @@ export class ComplaintApiService {
           tenantId: complaint.tenantId,
           propertyId: complaint.propertyId,
           roomId: complaint.roomId,
-          category: complaint.category,
-          priority: complaint.priority,
-          issueTitle: complaint.title,
+          complaintTitle: complaint.title,
+          complaintCategory: complaint.category,
+          priority: complaint.priority === ComplaintPriority.CRITICAL || complaint.priority === ComplaintPriority.URGENT
+            ? NotificationPriority.URGENT
+            : NotificationPriority.MEDIUM,
         },
       });
     } catch (error) {

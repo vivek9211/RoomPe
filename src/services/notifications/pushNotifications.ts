@@ -251,6 +251,90 @@ export class PushNotificationService {
       console.error('Error sending payment confirmation push notification:', error);
     }
   }
+
+  // Send complaint filed push notification
+  static async sendComplaintFiledNotification(
+    userId: string,
+    ownerName: string,
+    propertyName: string,
+    roomNumber: string,
+    complaintTitle: string,
+    complaintCategory: string,
+    priority: NotificationPriority
+  ): Promise<void> {
+    try {
+      console.log('Sending complaint filed push notification:', {
+        userId,
+        ownerName,
+        propertyName,
+        roomNumber,
+        complaintTitle,
+        complaintCategory,
+        priority,
+      });
+
+      const message = `New ${complaintCategory} complaint: "${complaintTitle}" for ${propertyName} - Room ${roomNumber}`;
+      console.log('Push notification message:', message);
+    } catch (error) {
+      console.error('Error sending complaint filed push notification:', error);
+    }
+  }
+
+  // Send complaint update push notification
+  static async sendComplaintUpdateNotification(
+    userId: string,
+    tenantName: string,
+    propertyName: string,
+    roomNumber: string,
+    complaintTitle: string,
+    status: string,
+    priority: NotificationPriority
+  ): Promise<void> {
+    try {
+      console.log('Sending complaint update push notification:', {
+        userId,
+        tenantName,
+        propertyName,
+        roomNumber,
+        complaintTitle,
+        status,
+        priority,
+      });
+
+      const message = `Complaint update: "${complaintTitle}" is now ${status} for ${propertyName} - Room ${roomNumber}`;
+      console.log('Push notification message:', message);
+    } catch (error) {
+      console.error('Error sending complaint update push notification:', error);
+    }
+  }
+
+  // Send complaint resolved push notification
+  static async sendComplaintResolvedNotification(
+    userId: string,
+    tenantName: string,
+    propertyName: string,
+    roomNumber: string,
+    complaintTitle: string,
+    resolvedBy: string,
+    priority: NotificationPriority
+  ): Promise<void> {
+    try {
+      console.log('Sending complaint resolved push notification:', {
+        userId,
+        tenantName,
+        propertyName,
+        roomNumber,
+        complaintTitle,
+        resolvedBy,
+        priority,
+      });
+
+      const message = `Complaint resolved: "${complaintTitle}" has been resolved by ${resolvedBy} for ${propertyName} - Room ${roomNumber}`;
+      console.log('Push notification message:', message);
+    } catch (error) {
+      console.error('Error sending complaint resolved push notification:', error);
+    }
+  }
 }
 
 export default PushNotificationService;

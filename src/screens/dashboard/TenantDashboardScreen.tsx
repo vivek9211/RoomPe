@@ -17,10 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../contexts/NotificationContext';
 import { firestoreService } from '../../services/firestore';
 import { TenantApplication, TenantApplicationStatus } from '../../types/tenant.types';
 import { Property } from '../../types/property.types';
 import { usePayments } from '../../hooks/usePayments';
+import NotificationBadge from '../../components/NotificationBadge';
 // Removed cleanup functions - no longer needed
 
 interface TenantDashboardScreenProps {
@@ -34,6 +36,7 @@ interface AssignedPropertyData {
 
 const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigation }) => {
   const { userProfile } = useAuth();
+  const { unreadCount, refreshUnreadCount } = useNotifications();
   const insets = useSafeAreaInsets();
   const [assignedProperty, setAssignedProperty] = useState<AssignedPropertyData | null>(null);
   const [loadingProperty, setLoadingProperty] = useState(true);
@@ -99,11 +102,12 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
         // Small delay to prevent immediate refresh on first load
         const timer = setTimeout(() => {
           refreshPayments();
+          refreshUnreadCount();
         }, 100);
         
         return () => clearTimeout(timer);
       }
-    }, [userProfile?.uid, refreshPayments])
+    }, [userProfile?.uid, refreshPayments, refreshUnreadCount])
   );
 
   const loadAssignedProperty = async () => {
@@ -265,7 +269,9 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
         
                  <View style={styles.actionIcons}>
            <TouchableOpacity style={styles.notificationIcon} onPress={handleNotifications}>
-             <Text style={styles.iconText}>🔔</Text>
+             <NotificationBadge count={unreadCount}>
+               <Text style={styles.iconText}>🔔</Text>
+             </NotificationBadge>
            </TouchableOpacity>
          </View>
       </View>

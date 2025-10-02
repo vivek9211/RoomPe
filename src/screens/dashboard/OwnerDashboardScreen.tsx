@@ -14,12 +14,14 @@ import {
   TextInput,
   FlatList,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { colors, fonts, dimensions } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProperty } from '../../contexts/PropertyContext';
+import { useNotifications } from '../../contexts/NotificationContext';
+import NotificationBadge from '../../components/NotificationBadge';
 import { Property } from '../../types/property.types';
 import { Tenant } from '../../types/tenant.types';
 import { Room } from '../../types/room.types';
@@ -52,6 +54,7 @@ interface TenantWithUser extends Tenant {
 
 const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation, route }) => {
   const { userProfile, signOut } = useAuth();
+  const { unreadCount, refreshUnreadCount } = useNotifications();
   const { selectedProperty, setSelectedProperty } = useProperty();
   const insets = useSafeAreaInsets();
   const [properties, setProperties] = useState<Property[]>([]);
@@ -111,6 +114,13 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
       return () => unsubscribe();
     }
   }, [userProfile?.uid]);
+
+  // Refresh notification count when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshUnreadCount();
+    }, [refreshUnreadCount])
+  );
 
   useEffect(() => {
     // Start entrance animations
@@ -434,7 +444,9 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
          
          <View style={styles.actionIcons}>
            <TouchableOpacity style={styles.notificationIcon} onPress={() => navigation.navigate('Notifications')}>
-             <Icon name="notifications-outline" size={20} color={colors.white} />
+             <NotificationBadge count={unreadCount}>
+               <Icon name="notifications-outline" size={20} color={colors.white} />
+             </NotificationBadge>
            </TouchableOpacity>
          </View>
        </View>

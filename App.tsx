@@ -13,6 +13,7 @@ import {
 import { colors } from './src/constants';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { PropertyProvider } from './src/contexts/PropertyContext';
+import { NotificationProvider } from './src/contexts/NotificationContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { PushNotificationService } from './src/services/notifications/pushNotifications';
 import { NotificationScheduler } from './src/services/notifications/notificationScheduler';
@@ -30,13 +31,15 @@ function App() {
   return (
     <AuthProvider>
       <PropertyProvider>
-        <SafeAreaProvider>
-          <StatusBar 
-            barStyle="dark-content" 
-            backgroundColor={colors.background}
-          />
-          <AppNavigator />
-        </SafeAreaProvider>
+        <NotificationProvider>
+          <SafeAreaProvider>
+            <StatusBar 
+              barStyle="dark-content" 
+              backgroundColor={colors.background}
+            />
+            <AppNavigator />
+          </SafeAreaProvider>
+        </NotificationProvider>
       </PropertyProvider>
     </AuthProvider>
   );

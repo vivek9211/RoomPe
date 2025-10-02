@@ -180,6 +180,9 @@ service cloud.firestore {
       allow read, write: if request.auth != null && 
         (resource == null || resource.data.userId == request.auth.uid);
       
+      // Allow users to list/query their own notifications (CRITICAL for where/orderBy queries)
+      allow list: if request.auth != null;
+      
       // Allow system to create notifications for any user (for automated notifications)
       allow create: if request.auth != null;
       

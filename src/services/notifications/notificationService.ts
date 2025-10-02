@@ -1,4 +1,5 @@
 import firestore, { Timestamp } from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { 
   Notification, 
   NotificationType, 
@@ -38,6 +39,12 @@ export class NotificationService {
     notificationData: CreateNotificationData
   ): Promise<string | null> {
     try {
+      // Check if user is authenticated
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+
       const notification: Omit<Notification, 'id'> = {
         ...notificationData,
         status: NotificationStatus.PENDING,
@@ -52,7 +59,8 @@ export class NotificationService {
           isAutomated: true,
           source: 'system',
           ...notificationData.metadata,
-        },
+          createdBy: currentUser.uid,
+        } as any,
       };
 
       const docRef = await firestore()
@@ -62,8 +70,7 @@ export class NotificationService {
       return docRef.id;
     } catch (error: any) {
       if (error?.code === 'firestore/permission-denied' || error?.code === 'permission-denied') {
-        console.log('Notification creation skipped due to insufficient permissions. This is expected when running without proper auth context.');
-        console.log('Notification data:', JSON.stringify(notificationData, null, 2));
+        console.log('Notification creation skipped due to insufficient permissions.');
       } else {
         console.error('Error saving notification to Firestore:', error);
       }
@@ -107,6 +114,15 @@ export class NotificationService {
           break;
         case NotificationType.PAYMENT_CONFIRMATION:
           await this.sendPaymentConfirmationNotification(notificationId, user, tenant, propertyName, roomNumber, notificationData);
+          break;
+        case NotificationType.COMPLAINT_FILED:
+          await this.sendComplaintFiledNotification(notificationId, user, tenant, propertyName, roomNumber, notificationData);
+          break;
+        case NotificationType.COMPLAINT_UPDATE:
+          await this.sendComplaintUpdateNotification(notificationId, user, tenant, propertyName, roomNumber, notificationData);
+          break;
+        case NotificationType.COMPLAINT_RESOLVED:
+          await this.sendComplaintResolvedNotification(notificationId, user, tenant, propertyName, roomNumber, notificationData);
           break;
         default:
           await this.sendGenericNotification(notificationId, user, notificationData);
@@ -282,6 +298,127 @@ export class NotificationService {
     );
   }
 
+  // Send complaint filed notification
+  private static async sendComplaintFiledNotification(
+    notificationId: string,
+    user: any,
+    tenant: any,
+    propertyName: string,
+    roomNumber: string,
+    notificationData: CreateNotificationData
+  ): Promise<void> {
+    const { metadata } = notificationData;
+    const complaintTitle = metadata?.complaintTitle || 'New Complaint';
+    const complaintCategory = metadata?.complaintCategory || 'General';
+    const priority = metadata?.priority || NotificationPriority.MEDIUM;
+
+    // Send local notification (using maintenance notification as fallback)
+    if (LocalNotificationService && typeof LocalNotificationService.scheduleMaintenanceNotification === 'function') {
+      LocalNotificationService.scheduleMaintenanceNotification(
+        user.uid,
+        user.name || 'Property Owner',
+        propertyName,
+        roomNumber,
+        `${complaintCategory}: ${complaintTitle}`,
+        priority
+      );
+    } else {
+      console.log('LocalNotificationService not available, skipping local notification');
+    }
+
+    // Send push notification
+    await PushNotificationService.sendComplaintFiledNotification(
+      user.uid,
+      user.name || 'Property Owner',
+      propertyName,
+      roomNumber,
+      complaintTitle,
+      complaintCategory,
+      priority
+    );
+  }
+
+  // Send complaint update notification
+  private static async sendComplaintUpdateNotification(
+    notificationId: string,
+    user: any,
+    tenant: any,
+    propertyName: string,
+    roomNumber: string,
+    notificationData: CreateNotificationData
+  ): Promise<void> {
+    const { metadata } = notificationData;
+    const complaintTitle = metadata?.complaintTitle || 'Complaint Update';
+    const status = metadata?.status || 'Updated';
+    const priority = metadata?.priority || NotificationPriority.MEDIUM;
+
+    // Send local notification (using maintenance update as fallback)
+    if (LocalNotificationService && typeof LocalNotificationService.scheduleMaintenanceUpdateNotification === 'function') {
+      LocalNotificationService.scheduleMaintenanceUpdateNotification(
+        user.uid,
+        user.name || 'Tenant',
+        propertyName,
+        roomNumber,
+        complaintTitle,
+        status,
+        'Property Management'
+      );
+    } else {
+      console.log('LocalNotificationService not available, skipping local notification');
+    }
+
+    // Send push notification
+    await PushNotificationService.sendComplaintUpdateNotification(
+      user.uid,
+      user.name || 'Tenant',
+      propertyName,
+      roomNumber,
+      complaintTitle,
+      status,
+      priority
+    );
+  }
+
+  // Send complaint resolved notification
+  private static async sendComplaintResolvedNotification(
+    notificationId: string,
+    user: any,
+    tenant: any,
+    propertyName: string,
+    roomNumber: string,
+    notificationData: CreateNotificationData
+  ): Promise<void> {
+    const { metadata } = notificationData;
+    const complaintTitle = metadata?.complaintTitle || 'Complaint Resolved';
+    const resolvedBy = metadata?.resolvedBy || 'Property Management';
+    const priority = metadata?.priority || NotificationPriority.LOW;
+
+    // Send local notification (using maintenance notification as fallback)
+    if (LocalNotificationService && typeof LocalNotificationService.scheduleMaintenanceNotification === 'function') {
+      LocalNotificationService.scheduleMaintenanceNotification(
+        user.uid,
+        user.name || 'Tenant',
+        propertyName,
+        roomNumber,
+        `Complaint Resolved: ${complaintTitle}`,
+        priority
+      );
+    } else {
+      console.log('LocalNotificationService not available, skipping local notification');
+    }
+
+    // Send push notification
+    await PushNotificationService.sendComplaintResolvedNotification(
+      user.uid,
+      user.name || 'Tenant',
+      propertyName,
+      roomNumber,
+      complaintTitle,
+      resolvedBy,
+      priority
+    );
+  }
+
   // Send payment confirmation notification
   private static async sendPaymentConfirmationNotification(
     notificationId: string,
@@ -451,32 +588,88 @@ export class NotificationService {
   // Mark notification as read
   static async markAsRead(notificationId: string): Promise<void> {
     try {
+      // Check if user is authenticated
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
+      
       await firestore()
         .collection('notifications')
         .doc(notificationId)
         .update({
-          'interaction.readAt': Timestamp.now(),
-          'interaction.opened': true,
+          status: NotificationStatus.READ,
+          readAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error marking notification as read:', error);
+      
+      // Re-throw permission errors so they can be handled by the UI
+      if (error?.code === 'firestore/permission-denied' || error?.code === 'permission-denied') {
+        throw error;
+      }
     }
   }
 
   // Get user notifications
   static async getUserNotifications(userId: string, limit: number = 50): Promise<Notification[]> {
     try {
-      const snapshot = await firestore()
-        .collection('notifications')
-        .where('userId', '==', userId)
-        .orderBy('createdAt', 'desc')
-        .limit(limit)
-        .get();
+      // Check if user is authenticated
+      const currentUser = auth().currentUser;
+      
+      if (!currentUser) {
+        throw new Error('User not authenticated');
+      }
 
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-    } catch (error) {
+      // Verify the requesting user matches the userId parameter (security check)
+      if (currentUser.uid !== userId) {
+        throw new Error('Unauthorized access to notifications');
+      }
+
+      let snapshot;
+      
+      try {
+        // Try with orderBy first
+        snapshot = await firestore()
+          .collection('notifications')
+          .where('userId', '==', userId)
+          .orderBy('createdAt', 'desc')
+          .limit(limit)
+          .get();
+      } catch (orderByError: any) {
+        // Fallback: try without orderBy (might be an indexing issue)
+        snapshot = await firestore()
+          .collection('notifications')
+          .where('userId', '==', userId)
+          .limit(limit)
+          .get();
+      }
+
+      let notifications = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Notification));
+
+      // If we used the fallback query, manually sort by createdAt
+      if (notifications.length > 0 && notifications[0].createdAt) {
+        notifications = notifications.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis?.() || 0;
+          const bTime = b.createdAt?.toMillis?.() || 0;
+          return bTime - aTime; // Descending order (newest first)
+        });
+      }
+
+      return notifications;
+    } catch (error: any) {
       console.error('Error getting user notifications:', error);
+      
+      // Re-throw permission errors so they can be handled by the UI
+      if (error?.code === 'firestore/permission-denied' || error?.code === 'permission-denied') {
+        throw error;
+      }
+      
+      // For other errors, return empty array but log the error
       return [];
     }
   }

@@ -84,6 +84,9 @@ import NotificationSettingsScreen from '../screens/settings/NotificationSettings
 // Analytics Screen
 import AnalyticsScreen from '../screens/dashboard/AnalyticsScreen';
 
+// Notifications Screen
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -361,8 +364,11 @@ const AppNavigator = () => {
             <Stack.Screen name="AddPayment" component={AddPaymentScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
+            <Stack.Screen name="ComplaintList" component={ComplaintListScreen} />
+            <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} />
             <Stack.Screen name="Reports" component={ReportsScreen} />
             <Stack.Screen name="FinancialReport" component={FinancialReportScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           </>
@@ -381,6 +387,7 @@ const AppNavigator = () => {
 
             <Stack.Screen name="AssignProperty" component={AssignPropertyScreen} />
             <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           </>
