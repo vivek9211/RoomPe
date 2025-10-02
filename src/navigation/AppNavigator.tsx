@@ -271,20 +271,6 @@ const TenantTabNavigator = () => {
           tabBarLabel: 'Complaints',
           tabBarIcon: ({ color, size, focused }) => (
             <Icon 
-              name={focused ? 'warning' : 'warning-outline'} 
-              size={focused ? 24 : 22} 
-              color={color} 
-            />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Maintenance"
-        component={MaintenanceListScreen}
-        options={{
-          tabBarLabel: 'Maintenance',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Icon 
               name={focused ? 'construct' : 'construct-outline'} 
               size={focused ? 24 : 22} 
               color={color} 
