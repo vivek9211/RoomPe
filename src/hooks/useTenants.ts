@@ -21,6 +21,7 @@ interface UseTenantsReturn {
   getTenantsWithFilters: (filters: TenantFilters) => Promise<void>;
   getTenantStats: (propertyId?: string) => Promise<void>;
   searchTenants: (searchTerm: string, propertyId?: string) => Promise<void>;
+  getTenantByUserId: (userId: string) => Promise<void>;
   
   // Utilities
   clearError: () => void;
@@ -205,6 +206,27 @@ export const useTenants = (): UseTenantsReturn => {
     }
   }, []);
 
+  const getTenantByUserId = useCallback(async (userId: string): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const tenantData = await tenantApiService.getTenantByUserId(userId);
+      if (tenantData) {
+        setTenant(tenantData);
+        setTenants([tenantData]); // Set as single tenant in array for consistency
+      } else {
+        setTenant(null);
+        setTenants([]);
+      }
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch tenant by user ID';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Set up real-time listeners for tenants when user is authenticated
   useEffect(() => {
     if (!user) {
@@ -213,11 +235,9 @@ export const useTenants = (): UseTenantsReturn => {
       return;
     }
 
-    // If user is an owner, we can set up listeners for their properties
-    // For now, we'll just clear the state when user changes
-    setTenants([]);
-    setTenant(null);
-  }, [user]);
+    // Load current user's tenant data (if they are a tenant)
+    getTenantByUserId(user.uid);
+  }, [user, getTenantByUserId]);
 
   return {
     // State
@@ -237,6 +257,7 @@ export const useTenants = (): UseTenantsReturn => {
     getTenantsWithFilters,
     getTenantStats,
     searchTenants,
+    getTenantByUserId,
     
     // Utilities
     clearError,

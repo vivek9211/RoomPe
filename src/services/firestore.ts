@@ -12,6 +12,7 @@ export const COLLECTIONS = {
   ROOM_MAPPINGS: 'room_mappings',
   TENANT_APPLICATIONS: 'tenant_applications',
   TENANTS: 'tenants',
+  ROOMS: 'rooms',
 } as const;
 
 // Firestore service class for all Firestore operations
@@ -779,6 +780,215 @@ class FirestoreService {
   }
 
   // ==================== ROOM MAPPING OPERATIONS ====================
+
+  /**
+   * Get room details by room ID
+   * @param roomId - Room ID (usually the unit number)
+   * @returns Room details or null if not found
+   */
+  async getRoomById(roomId: string): Promise<any | null> {
+    try {
+      // Since rooms are stored in room mappings, we need to search through all properties
+      // This is not the most efficient approach, but it works with the current structure
+      
+      // First, try to find the room by searching through room mappings
+      const roomMappingsSnapshot = await this.roomMappingsCollection.get();
+      
+      for (const mappingDoc of roomMappingsSnapshot.docs) {
+        const mappingData = mappingDoc.data();
+        
+        if (mappingData.floors) {
+          // Search through floors to find the room
+          for (const floor of mappingData.floors) {
+            if (floor.units) {
+              for (const unit of floor.units) {
+                if (unit.id === roomId || unit.unitNumber === roomId) {
+                  return {
+                    id: unit.id || roomId,
+                    roomNumber: unit.unitNumber,
+                    unitType: unit.unitType,
+                    sharingType: unit.sharingType,
+                    capacity: unit.capacity,
+                    isOccupied: unit.isOccupied,
+                    tenantIds: unit.tenantIds || [],
+                    rent: unit.rent,
+                    deposit: unit.deposit,
+                    amenities: unit.amenities || [],
+                    status: unit.status,
+                    floorId: unit.floorId,
+                    propertyId: mappingData.propertyId,
+                    floorName: floor.floorName,
+                    createdAt: unit.createdAt,
+                    updatedAt: unit.updatedAt,
+                  };
+                }
+              }
+            }
+          }
+        }
+        
+        // Also check floorConfigs for older format
+        if (mappingData.floorConfigs) {
+          for (const floorConfig of mappingData.floorConfigs) {
+            // Generate room numbers similar to how it's done in the screens
+            let unitCounter = 1;
+            const floorNumber = mappingData.floorConfigs.indexOf(floorConfig) + 1;
+            
+            // Check BHK units
+            if (floorConfig.unitConfigs) {
+              for (const [unitType, count] of Object.entries(floorConfig.unitConfigs)) {
+                for (let i = 0; i < (count as number); i++) {
+                  const unitNumber = `${floorNumber}${String(unitCounter).padStart(2, '0')}`;
+                  if (unitNumber === roomId || `${floorConfig.floorId}_unit_${unitCounter}` === roomId) {
+                    return {
+                      id: `${floorConfig.floorId}_unit_${unitCounter}`,
+                      roomNumber: unitNumber,
+                      unitType: unitType,
+                      capacity: this.getCapacityForUnitType(unitType as any),
+                      rent: this.getDefaultRentForUnitType(unitType as any),
+                      deposit: this.getDefaultDepositForUnitType(unitType as any),
+                      propertyId: mappingData.propertyId,
+                      floorName: floorConfig.floorName || `Floor ${floorNumber}`,
+                      status: 'available',
+                      isOccupied: false,
+                      tenantIds: [],
+                      amenities: [],
+                    };
+                  }
+                  unitCounter++;
+                }
+              }
+            }
+            
+            // Check room units
+            if (floorConfig.roomConfigs) {
+              for (const [sharingType, count] of Object.entries(floorConfig.roomConfigs)) {
+                for (let i = 0; i < (count as number); i++) {
+                  const roomNumber = `${floorNumber}${String(unitCounter).padStart(2, '0')}`;
+                  if (roomNumber === roomId || `${floorConfig.floorId}_room_${unitCounter}` === roomId) {
+                    return {
+                      id: `${floorConfig.floorId}_room_${unitCounter}`,
+                      roomNumber: roomNumber,
+                      unitType: 'room',
+                      sharingType: sharingType,
+                      capacity: this.getCapacityForSharingType(sharingType as any),
+                      rent: this.getDefaultRentForSharingType(sharingType as any),
+                      deposit: this.getDefaultDepositForSharingType(sharingType as any),
+                      propertyId: mappingData.propertyId,
+                      floorName: floorConfig.floorName || `Floor ${floorNumber}`,
+                      status: 'available',
+                      isOccupied: false,
+                      tenantIds: [],
+                      amenities: [],
+                    };
+                  }
+                  unitCounter++;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // If not found in room mappings, return a basic room object with the roomId as roomNumber
+      console.log(`Room ${roomId} not found in room mappings, returning basic room info`);
+      return {
+        id: roomId,
+        roomNumber: roomId,
+        unitType: 'room',
+        capacity: 1,
+        rent: 0,
+        deposit: 0,
+        status: 'available',
+        isOccupied: false,
+        tenantIds: [],
+        amenities: [],
+      };
+    } catch (error) {
+      console.error('Error fetching room by ID:', error);
+      // Return a basic room object as fallback
+      return {
+        id: roomId,
+        roomNumber: roomId,
+        unitType: 'room',
+        capacity: 1,
+        rent: 0,
+        deposit: 0,
+        status: 'available',
+        isOccupied: false,
+        tenantIds: [],
+        amenities: [],
+      };
+    }
+  }
+
+  /**
+   * Helper method to get capacity for unit type
+   */
+  private getCapacityForUnitType(unitType: string): number {
+    switch (unitType) {
+      case '1bhk': return 2;
+      case '2bhk': return 4;
+      case '3bhk': return 6;
+      case '4bhk': return 8;
+      case 'studio': return 1;
+      default: return 1;
+    }
+  }
+
+  /**
+   * Helper method to get capacity for sharing type
+   */
+  private getCapacityForSharingType(sharingType: string): number {
+    switch (sharingType) {
+      case 'single': return 1;
+      case 'double': return 2;
+      case 'triple': return 3;
+      case 'quad': return 4;
+      default: return 1;
+    }
+  }
+
+  /**
+   * Helper method to get default rent for unit type
+   */
+  private getDefaultRentForUnitType(unitType: string): number {
+    switch (unitType) {
+      case '1bhk': return 15000;
+      case '2bhk': return 25000;
+      case '3bhk': return 35000;
+      case '4bhk': return 45000;
+      case 'studio': return 12000;
+      default: return 10000;
+    }
+  }
+
+  /**
+   * Helper method to get default rent for sharing type
+   */
+  private getDefaultRentForSharingType(sharingType: string): number {
+    switch (sharingType) {
+      case 'single': return 8000;
+      case 'double': return 6000;
+      case 'triple': return 5000;
+      case 'quad': return 4000;
+      default: return 8000;
+    }
+  }
+
+  /**
+   * Helper method to get default deposit for unit type
+   */
+  private getDefaultDepositForUnitType(unitType: string): number {
+    return this.getDefaultRentForUnitType(unitType) * 2;
+  }
+
+  /**
+   * Helper method to get default deposit for sharing type
+   */
+  private getDefaultDepositForSharingType(sharingType: string): number {
+    return this.getDefaultRentForSharingType(sharingType) * 2;
+  }
 
   /**
    * Create or update room mapping for a property

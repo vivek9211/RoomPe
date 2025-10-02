@@ -157,6 +157,10 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
     navigation.navigate('AddMaintenance');
   };
 
+  const handleSubmitComplaint = () => {
+    navigation.navigate('SubmitComplaint');
+  };
+
   const handleAttendance = () => {
     Alert.alert('Attendance', 'Mark your attendance for leave requests');
   };
@@ -484,6 +488,14 @@ const TenantDashboardScreen: React.FC<TenantDashboardScreenProps> = ({ navigatio
               </View>
               <Text style={styles.lifeCardTitle}>Report Issue</Text>
               <Text style={styles.lifeCardSubtitle}>Quick issue reporting</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.lifeCard} onPress={handleSubmitComplaint}>
+              <View style={styles.lifeCardIcon}>
+                <Icon name="warning-outline" size={24} color="#4F46E5" />
+              </View>
+              <Text style={styles.lifeCardTitle}>Submit Complaint</Text>
+              <Text style={styles.lifeCardSubtitle}>Report problems</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.lifeCard} onPress={handleAttendance}>

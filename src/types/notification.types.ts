@@ -33,6 +33,7 @@ export enum NotificationPriority {
 
 // Notification status enumeration
 export enum NotificationStatus {
+  PENDING = 'pending',
   SENT = 'sent',
   DELIVERED = 'delivered',
   READ = 'read',
@@ -69,6 +70,7 @@ export interface CreateNotificationData {
   title: string;
   message: string;
   priority: NotificationPriority;
+  metadata?: Record<string, any>;
 }
 
 // Optional fields for notification updates

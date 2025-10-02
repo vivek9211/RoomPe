@@ -6,3 +6,4 @@ export { default as googleSignIn } from './googleSignIn';
 export { default as imageService } from './imageService';
 export { default as userService } from './userService'; 
 export { default as paymentApiService } from './api/paymentApi';
+export { complaintApiService } from './api/complaintApi';

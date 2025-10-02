@@ -62,6 +62,13 @@ import MaintenanceListScreen from '../screens/maintenance/MaintenanceListScreen'
 import MaintenanceDetailScreen from '../screens/maintenance/MaintenanceDetailScreen';
 import AddMaintenanceScreen from '../screens/maintenance/AddMaintenanceScreen';
 
+// Complaint Screens
+import { 
+  SubmitComplaintScreen, 
+  ComplaintListScreen, 
+  ComplaintDetailScreen 
+} from '../screens/complaints';
+
 // Reports Screens
 import ReportsScreen from '../screens/reports/ReportsScreen';
 import FinancialReportScreen from '../screens/reports/FinancialReportScreen';
@@ -255,6 +262,20 @@ const TenantTabNavigator = () => {
         }}
       />
       <Tab.Screen
+        name="Complaints"
+        component={ComplaintListScreen}
+        options={{
+          tabBarLabel: 'Complaints',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Icon 
+              name={focused ? 'warning' : 'warning-outline'} 
+              size={focused ? 24 : 22} 
+              color={color} 
+            />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="Maintenance"
         component={MaintenanceListScreen}
         options={{
@@ -355,6 +376,8 @@ const AppNavigator = () => {
             <Stack.Screen name="PaymentDetail" component={PaymentDetailScreen} />
             <Stack.Screen name="MaintenanceDetail" component={MaintenanceDetailScreen} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} />
+            <Stack.Screen name="SubmitComplaint" component={SubmitComplaintScreen} />
+            <Stack.Screen name="ComplaintDetail" component={ComplaintDetailScreen} />
 
             <Stack.Screen name="AssignProperty" component={AssignPropertyScreen} />
             <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />

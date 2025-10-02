@@ -156,10 +156,42 @@ service cloud.firestore {
          userOwnsProperty(resource.data.propertyId));
     }
 
-    // Notifications collection rules
-    match /notifications/{notificationId} {
+    // Complaints collection rules
+    match /complaints/{complaintId} {
+      // Allow users to manage complaints for properties they own
       allow read, write: if request.auth != null && 
         (resource == null || userOwnsProperty(resource.data.propertyId));
+      
+      // Allow tenants to create and read their own complaints
+      allow create: if request.auth != null && 
+        request.resource.data.tenantId == request.auth.uid;
+      
+      allow read, update: if request.auth != null && 
+        (resource.data.tenantId == request.auth.uid ||
+         userOwnsProperty(resource.data.propertyId));
+      
+      // Allow listing complaints for authenticated users (for filtering)
+      allow list: if request.auth != null;
+    }
+
+    // Notifications collection rules
+    match /notifications/{notificationId} {
+      // Allow users to read and manage their own notifications
+      allow read, write: if request.auth != null && 
+        (resource == null || resource.data.userId == request.auth.uid);
+      
+      // Allow system to create notifications for any user (for automated notifications)
+      allow create: if request.auth != null;
+      
+      // Allow users to update notification status (mark as read, etc.)
+      allow update: if request.auth != null && 
+        (resource.data.userId == request.auth.uid);
+      
+      // Allow property owners to create notifications for their tenants
+      allow create: if request.auth != null && 
+        (request.resource.data.metadata != null && 
+         request.resource.data.metadata.propertyId != null &&
+         userOwnsProperty(request.resource.data.metadata.propertyId));
     }
 
     // ==================== TENANT APPLICATIONS RULES ====================
