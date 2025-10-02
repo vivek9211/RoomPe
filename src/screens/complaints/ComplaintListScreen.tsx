@@ -220,12 +220,7 @@ const ComplaintListScreen: React.FC<ComplaintListScreenProps> = ({ navigation, r
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Complaints</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleNewComplaint}
-        >
-          <Text style={styles.addButtonText}>+</Text>
-        </TouchableOpacity>
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Filters */}
@@ -297,6 +292,11 @@ const ComplaintListScreen: React.FC<ComplaintListScreenProps> = ({ navigation, r
           </View>
         )}
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity style={styles.fab} onPress={handleNewComplaint}>
+        <Text style={styles.fabIcon}>+</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
@@ -339,18 +339,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  addButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: colors.white,
-    fontSize: fonts.lg,
-    fontWeight: 'bold',
+  headerSpacer: {
+    width: 32, // Same width as the back button to center the title
   },
   filtersContainer: {
     backgroundColor: colors.white,
@@ -527,6 +517,27 @@ const styles = StyleSheet.create({
   assignedText: {
     fontSize: fonts.xs,
     color: colors.textMuted,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: dimensions.spacing.xl,
+    right: dimensions.spacing.xl,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabIcon: {
+    color: colors.white,
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });
 
