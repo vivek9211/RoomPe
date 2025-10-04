@@ -106,6 +106,18 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+    
+    // Customize APK name
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def variantName = variant.name
+            def buildType = variant.buildType.name
+            def versionName = variant.versionName
+            def versionCode = variant.versionCode
+            
+            outputFileName = "RoomPe-${variantName}-v${versionName}-${versionCode}.apk"
+        }
+    }
 }
 
 dependencies {
