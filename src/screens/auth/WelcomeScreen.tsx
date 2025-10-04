@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { colors, fonts, dimensions } from '../../constants';
 import { Button } from '../../components/common';
 
@@ -39,7 +40,21 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         {/* App Logo/Brand */}
         <View style={styles.logoContainer}>
           <Text style={styles.logoText}>RoomPe</Text>
-          <Text style={styles.tagline}>Rent Management Made Simple</Text>
+          
+          {/* Lottie Animation - Full Width */}
+          <View style={styles.animationContainer}>
+            <LottieView
+              source={{
+                uri: 'https://lottie.host/e67fa508-0b38-4484-9ac4-951b487b562d/g9PkzBADI1.lottie'
+              }}
+              autoPlay
+              loop
+              style={styles.animation}
+              onAnimationFinish={() => {
+                console.log('Animation finished');
+              }}
+            />
+          </View>
         </View>
 
         {/* Action Buttons */}
@@ -68,12 +83,12 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
   content: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingHorizontal: dimensions.spacing.xl,
+    paddingHorizontal: dimensions.spacing.lg,
     paddingTop: dimensions.spacing.xxxl,
     paddingBottom: dimensions.spacing.xxl,
   },
@@ -86,16 +101,23 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: colors.textPrimary,
     letterSpacing: 2,
-    marginBottom: dimensions.spacing.sm,
+    marginBottom: dimensions.spacing.md,
   },
-  tagline: {
-    fontSize: fonts.lg,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    fontWeight: '400' as const,
+  animationContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: dimensions.spacing.xxl,
+    marginBottom: dimensions.spacing.xl,
+    width: '100%',
+  },
+  animation: {
+    width: '100%',
+    height: 300,
+    maxWidth: 400,
   },
   buttonContainer: {
     gap: dimensions.spacing.md,
+    marginTop: -dimensions.spacing.lg,
   },
   loginButton: {
     marginBottom: dimensions.spacing.sm,
