@@ -1,4 +1,4 @@
-import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import { getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, limit, writeBatch, FirebaseFirestoreTypes, serverTimestamp, Timestamp, FieldValue, documentId } from '@react-native-firebase/firestore';
 import { User, UserRole, UserStatus, CreateUserData, UpdateUserData } from '../types/user.types';
 
 // Firestore collection names
@@ -19,27 +19,27 @@ export const COLLECTIONS = {
 class FirestoreService {
   // Users collection
   private get usersCollection() {
-    return firestore().collection(COLLECTIONS.USERS);
+    return collection(getFirestore(), COLLECTIONS.USERS);
   }
 
   // Properties collection
   private get propertiesCollection() {
-    return firestore().collection(COLLECTIONS.PROPERTIES);
+    return collection(getFirestore(), COLLECTIONS.PROPERTIES);
   }
 
   // Room Mappings collection
   private get roomMappingsCollection() {
-    return firestore().collection(COLLECTIONS.ROOM_MAPPINGS);
+    return collection(getFirestore(), COLLECTIONS.ROOM_MAPPINGS);
   }
 
   // Tenant Applications collection
   private get tenantApplicationsCollection() {
-    return firestore().collection(COLLECTIONS.TENANT_APPLICATIONS);
+    return collection(getFirestore(), COLLECTIONS.TENANT_APPLICATIONS);
   }
 
   // Tenants collection
   private get tenantsCollection() {
-    return firestore().collection(COLLECTIONS.TENANTS);
+    return collection(getFirestore(), COLLECTIONS.TENANTS);
   }
 
   // ==================== USER OPERATIONS ====================
@@ -61,8 +61,8 @@ class FirestoreService {
           phone: data?.phone || '',
           role: data?.role as UserRole,
           status: data?.status || UserStatus.ACTIVE,
-          createdAt: data?.createdAt || firestore.Timestamp.now(),
-          updatedAt: data?.updatedAt || firestore.Timestamp.now(),
+          createdAt: data?.createdAt || Timestamp.now(),
+          updatedAt: data?.updatedAt || Timestamp.now(),
           isActive: data?.isActive ?? true,
           emailVerified: data?.emailVerified ?? false,
           phoneVerified: data?.phoneVerified ?? false,
@@ -98,8 +98,8 @@ class FirestoreService {
         isActive: true,
         emailVerified: false,
         phoneVerified: false,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       
       console.log('Creating user profile with data:', userDoc);
@@ -128,7 +128,7 @@ class FirestoreService {
     try {
       const updateData = {
         ...updates,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       
       await this.usersCollection.doc(uid).set(updateData as any, { merge: true });
@@ -167,10 +167,10 @@ class FirestoreService {
       for (let i = 0; i < uids.length; i += batchSize) {
         const batch = uids.slice(i, i + batchSize);
         const snapshot = await this.usersCollection
-          .where(firestore.FieldPath.documentId(), 'in', batch)
+          .where(documentId(), 'in', batch)
           .get();
 
-        snapshot.forEach(doc => {
+        snapshot.forEach((doc: any) => {
           const data = doc.data();
           users.push({
             uid: doc.id,
@@ -179,8 +179,8 @@ class FirestoreService {
             phone: data?.phone || '',
             role: data?.role || UserRole.TENANT,
             status: data?.status || UserStatus.ACTIVE,
-            createdAt: data?.createdAt || firestore.Timestamp.now(),
-            updatedAt: data?.updatedAt || firestore.Timestamp.now(),
+            createdAt: data?.createdAt || Timestamp.now(),
+            updatedAt: data?.updatedAt || Timestamp.now(),
             isActive: data?.isActive ?? true,
             emailVerified: data?.emailVerified ?? false,
             phoneVerified: data?.phoneVerified ?? false,
@@ -220,7 +220,7 @@ class FirestoreService {
         .get();
 
       const users: User[] = [];
-      nameQuery.forEach(doc => {
+      nameQuery.forEach((doc: any) => {
         const data = doc.data();
         users.push({
           uid: doc.id,
@@ -229,8 +229,8 @@ class FirestoreService {
           phone: data?.phone || '',
           role: data?.role || UserRole.TENANT,
           status: data?.status || UserStatus.ACTIVE,
-          createdAt: data?.createdAt || firestore.Timestamp.now(),
-          updatedAt: data?.updatedAt || firestore.Timestamp.now(),
+          createdAt: data?.createdAt || Timestamp.now(),
+          updatedAt: data?.updatedAt || Timestamp.now(),
           isActive: data?.isActive ?? true,
           emailVerified: data?.emailVerified ?? false,
           phoneVerified: data?.phoneVerified ?? false,
@@ -266,7 +266,7 @@ class FirestoreService {
         .get();
 
       const users: User[] = [];
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc: any) => {
         const data = doc.data();
         users.push({
           uid: doc.id,
@@ -275,8 +275,8 @@ class FirestoreService {
           phone: data?.phone || '',
           role: data?.role || UserRole.TENANT,
           status: data?.status || UserStatus.ACTIVE,
-          createdAt: data?.createdAt || firestore.Timestamp.now(),
-          updatedAt: data?.updatedAt || firestore.Timestamp.now(),
+          createdAt: data?.createdAt || Timestamp.now(),
+          updatedAt: data?.updatedAt || Timestamp.now(),
           isActive: data?.isActive ?? true,
           emailVerified: data?.emailVerified ?? false,
           phoneVerified: data?.phoneVerified ?? false,
@@ -338,14 +338,14 @@ class FirestoreService {
   async getAvailableTenantsWithApprovedApplications(ownerId: string, limit: number = 50): Promise<User[]> {
     try {
       // Get approved tenant applications for this owner
-      const approvedApplicationsSnapshot = await firestore()
-        .collection(COLLECTIONS.TENANT_APPLICATIONS)
-        .where('ownerId', '==', ownerId)
-        .where('status', '==', 'approved')
-        .get();
+      const approvedApplicationsSnapshot = await getDocs(query(
+        collection(getFirestore(), COLLECTIONS.TENANT_APPLICATIONS),
+        where('ownerId', '==', ownerId),
+        where('status', '==', 'approved')
+      ));
 
       const approvedTenantIds = new Set<string>();
-      approvedApplicationsSnapshot.forEach(doc => {
+      approvedApplicationsSnapshot.forEach((doc: any) => {
         const data = doc.data();
         if (data.tenantId) {
           approvedTenantIds.add(data.tenantId);
@@ -391,8 +391,8 @@ class FirestoreService {
                 phone: data?.phone || '',
                 role: data?.role || UserRole.TENANT,
                 status: data?.status || UserStatus.ACTIVE,
-                createdAt: data?.createdAt || firestore.Timestamp.now(),
-                updatedAt: data?.updatedAt || firestore.Timestamp.now(),
+                createdAt: data?.createdAt || Timestamp.now(),
+                updatedAt: data?.updatedAt || Timestamp.now(),
                 isActive: data?.isActive ?? true,
                 emailVerified: data?.emailVerified ?? false,
                 phoneVerified: data?.phoneVerified ?? false,
@@ -425,8 +425,8 @@ class FirestoreService {
   async updateLastLogin(uid: string): Promise<void> {
     try {
       await this.usersCollection.doc(uid).update({
-        lastLoginAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        lastLoginAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error('Error updating last login:', error);
@@ -443,7 +443,7 @@ class FirestoreService {
     try {
       await this.usersCollection.doc(uid).update({
         emailVerified: verified,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error('Error updating email verification:', error);
@@ -460,7 +460,7 @@ class FirestoreService {
     try {
       await this.usersCollection.doc(uid).update({
         phoneVerified: verified,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error('Error updating phone verification:', error);
@@ -479,8 +479,8 @@ class FirestoreService {
     try {
       const propertyDoc = {
         ...propertyData,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       
       console.log('Creating property with data:', propertyDoc);
@@ -507,7 +507,7 @@ class FirestoreService {
         .get();
 
       const properties: any[] = [];
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc: any) => {
         const data = doc.data();
         properties.push({
           id: doc.id,
@@ -558,7 +558,7 @@ class FirestoreService {
     try {
       const updateData = {
         ...updates,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       
       await this.propertiesCollection.doc(propertyId).update(updateData);
@@ -589,7 +589,7 @@ class FirestoreService {
     try {
       const updateData: any = {
         payments,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       await this.propertiesCollection.doc(propertyId).set(updateData, { merge: true });
     } catch (error) {
@@ -621,9 +621,9 @@ class FirestoreService {
     return this.propertiesCollection
       .where('ownerId', '==', ownerId)
       .onSnapshot(
-        (snapshot) => {
+        (snapshot: any) => {
           const properties: any[] = [];
-          snapshot.forEach(doc => {
+          snapshot.forEach((doc: any) => {
             const data = doc.data();
             properties.push({
               id: doc.id,
@@ -640,7 +640,7 @@ class FirestoreService {
           
           callback(sortedProperties);
         },
-        (error) => {
+        (error: any) => {
           console.error('Error listening to properties changes:', error);
           callback([]);
         }
@@ -676,7 +676,7 @@ class FirestoreService {
       const snapshot = await query.get();
       const properties: any[] = [];
 
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc: any) => {
         const data = doc.data();
         const property = {
           id: doc.id,
@@ -744,7 +744,7 @@ class FirestoreService {
    */
   onUserProfileChange(uid: string, callback: (user: User | null) => void): () => void {
     return this.usersCollection.doc(uid).onSnapshot(
-      (doc) => {
+      (doc: any) => {
         if (doc.exists) {
           const data = doc.data();
           const user: User = {
@@ -754,8 +754,8 @@ class FirestoreService {
             phone: data?.phone || '',
             role: data?.role || UserRole.TENANT,
             status: data?.status || UserStatus.ACTIVE,
-            createdAt: data?.createdAt || firestore.Timestamp.now(),
-            updatedAt: data?.updatedAt || firestore.Timestamp.now(),
+            createdAt: data?.createdAt || Timestamp.now(),
+            updatedAt: data?.updatedAt || Timestamp.now(),
             isActive: data?.isActive ?? true,
             emailVerified: data?.emailVerified ?? false,
             phoneVerified: data?.phoneVerified ?? false,
@@ -772,7 +772,7 @@ class FirestoreService {
           callback(null);
         }
       },
-      (error) => {
+      (error: any) => {
         console.error('Error listening to user profile changes:', error);
         callback(null);
       }
@@ -1007,8 +1007,8 @@ class FirestoreService {
         propertyId,
         totalFloors: roomMappingData.totalFloors,
         floorConfigs: roomMappingData.floorConfigs,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
 
       // Use propertyId as the document ID for easy querying
@@ -1067,7 +1067,7 @@ class FirestoreService {
     callback: (roomMapping: any | null) => void
   ): () => void {
     return this.roomMappingsCollection.doc(propertyId).onSnapshot(
-      (doc) => {
+      (doc: any) => {
         if (doc.exists) {
           callback({
             id: doc.id,
@@ -1077,7 +1077,7 @@ class FirestoreService {
           callback(null);
         }
       },
-      (error) => {
+      (error: any) => {
         console.error('Error listening to room mapping changes:', error);
         callback(null);
       }
@@ -1115,8 +1115,8 @@ class FirestoreService {
       const applicationDoc = {
         ...cleanApplicationData,
         status: 'pending',
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       };
       
       const docRef = await this.tenantApplicationsCollection.add(applicationDoc);
@@ -1141,13 +1141,13 @@ class FirestoreService {
         // .orderBy('createdAt', 'desc')
         .get();
 
-      const applications = snapshot.docs.map(doc => ({
+      const applications = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       }));
 
       // Sort in memory instead
-      return applications.sort((a, b) => {
+      return applications.sort((a: any, b: any) => {
         const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
         const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
         return dateB.getTime() - dateA.getTime();
@@ -1171,13 +1171,13 @@ class FirestoreService {
         // .orderBy('createdAt', 'desc')
         .get();
 
-      const applications = snapshot.docs.map(doc => ({
+      const applications = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       }));
 
       // Sort in memory instead
-      return applications.sort((a, b) => {
+      return applications.sort((a: any, b: any) => {
         const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
         const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
         return dateB.getTime() - dateA.getTime();
@@ -1201,14 +1201,14 @@ class FirestoreService {
     return this.tenantApplicationsCollection
       .where('ownerId', '==', ownerId)
       .onSnapshot(
-        (snapshot) => {
-          const applications = snapshot.docs.map(doc => ({
+        (snapshot: any) => {
+          const applications = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
           }));
           
           // Sort in memory instead
-          const sortedApplications = applications.sort((a, b) => {
+          const sortedApplications = applications.sort((a: any, b: any) => {
             const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
             const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
             return dateB.getTime() - dateA.getTime();
@@ -1216,7 +1216,7 @@ class FirestoreService {
           
           callback(sortedApplications);
         },
-        (error) => {
+        (error: any) => {
           console.error('Error listening to all tenant applications changes:', error);
           callback([]);
         }
@@ -1235,13 +1235,13 @@ class FirestoreService {
         .where('tenantId', '==', tenantId)
         .get();
 
-      const applications = snapshot.docs.map(doc => ({
+      const applications = snapshot.docs.map((doc: any) => ({
         id: doc.id,
         ...doc.data()
       }));
 
       // Sort in memory
-      return applications.sort((a, b) => {
+      return applications.sort((a: any, b: any) => {
         const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
         const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
         return dateB.getTime() - dateA.getTime();
@@ -1265,8 +1265,8 @@ class FirestoreService {
     try {
       const updateDoc = {
         ...updateData,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-        reviewedAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        reviewedAt: serverTimestamp(),
       };
 
       await this.tenantApplicationsCollection.doc(applicationId).update(updateDoc);
@@ -1301,8 +1301,8 @@ class FirestoreService {
         .where('ownerId', '==', ownerId)
         .get();
 
-      const batch = firestore().batch();
-      snapshot.docs.forEach(doc => {
+      const batch = writeBatch(getFirestore());
+      snapshot.docs.forEach((doc: any) => {
         batch.delete(doc.ref);
       });
 
@@ -1330,14 +1330,14 @@ class FirestoreService {
       // Temporarily remove orderBy to avoid index requirement
       // .orderBy('createdAt', 'desc')
       .onSnapshot(
-        (snapshot) => {
-          const applications = snapshot.docs.map(doc => ({
+        (snapshot: any) => {
+          const applications = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
           }));
           
           // Sort in memory instead
-          const sortedApplications = applications.sort((a, b) => {
+          const sortedApplications = applications.sort((a: any, b: any) => {
             const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
             const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
             return dateB.getTime() - dateA.getTime();
@@ -1345,7 +1345,7 @@ class FirestoreService {
           
           callback(sortedApplications);
         },
-        (error) => {
+        (error: any) => {
           console.error('Error listening to tenant applications changes:', error);
           callback([]);
         }
@@ -1367,14 +1367,14 @@ class FirestoreService {
       // Temporarily remove orderBy to avoid index requirement
       // .orderBy('createdAt', 'desc')
       .onSnapshot(
-        (snapshot) => {
-          const applications = snapshot.docs.map(doc => ({
+        (snapshot: any) => {
+          const applications = snapshot.docs.map((doc: any) => ({
             id: doc.id,
             ...doc.data()
           }));
           
           // Sort in memory instead
-          const sortedApplications = applications.sort((a, b) => {
+          const sortedApplications = applications.sort((a: any, b: any) => {
             const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
             const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
             return dateB.getTime() - dateA.getTime();
@@ -1382,7 +1382,7 @@ class FirestoreService {
           
           callback(sortedApplications);
         },
-        (error) => {
+        (error: any) => {
           console.error('Error listening to tenant applications changes:', error);
           callback([]);
         }

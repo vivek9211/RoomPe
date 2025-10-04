@@ -26,7 +26,7 @@ import { Property } from '../../types/property.types';
 import { Tenant } from '../../types/tenant.types';
 import { Room } from '../../types/room.types';
 import { firestoreService } from '../../services/firestore';
-import firestore from '@react-native-firebase/firestore';
+import { getFirestore, collection, query, where, getDocs } from '@react-native-firebase/firestore';
 import { tenantApiService } from '../../services/api/tenantApi';
 
 interface OwnerDashboardScreenProps {
@@ -213,12 +213,12 @@ const OwnerDashboardScreen: React.FC<OwnerDashboardScreenProps> = ({ navigation,
       const chunkSize = 10;
       for (let i = 0; i < propertyIds.length; i += chunkSize) {
         const chunk = propertyIds.slice(i, i + chunkSize);
-        const snap = await firestore()
-          .collection('payments')
-          .where('propertyId', 'in', chunk)
-          .get();
+        const db = getFirestore();
+        const paymentsRef = collection(db, 'payments');
+        const q = query(paymentsRef, where('propertyId', 'in', chunk));
+        const snap = await getDocs(q);
 
-        snap.forEach(doc => {
+        snap.forEach((doc: any) => {
           const data: any = doc.data();
           const status = data.status;
           const amount = Number(data.amount) || 0;

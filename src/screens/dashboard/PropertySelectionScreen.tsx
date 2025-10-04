@@ -176,8 +176,6 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
 
       setTenantCounts(counts);
       setOccupiedRoomIds(occupiedRoomsData);
-      console.log('Tenant counts loaded:', counts);
-      console.log('Occupied rooms loaded:', occupiedRoomsData);
     } catch (error) {
       console.error('Error loading tenant counts:', error);
     }
@@ -224,7 +222,6 @@ const PropertySelectionScreen: React.FC<PropertySelectionScreenProps> = ({ navig
       }
       
       setRoomMappings(mappings);
-      console.log('Room mappings loaded:', mappings);
     } catch (error) {
       console.error('Error loading room mappings:', error);
     }

@@ -1,5 +1,5 @@
-import firestore, { Timestamp } from '@react-native-firebase/firestore';
-import auth from '@react-native-firebase/auth';
+import { getFirestore, collection, query, where, getDocs, orderBy, limit, addDoc, updateDoc, doc, Timestamp } from '@react-native-firebase/firestore';
+import { getAuth } from '@react-native-firebase/auth';
 import { 
   Notification, 
   NotificationType, 
@@ -40,7 +40,7 @@ export class NotificationService {
   ): Promise<string | null> {
     try {
       // Check if user is authenticated
-      const currentUser = auth().currentUser;
+        const currentUser = getAuth().currentUser;
       if (!currentUser) {
         throw new Error('User not authenticated');
       }
@@ -76,9 +76,9 @@ export class NotificationService {
         metadata: cleanMetadata as any,
       };
 
-      const docRef = await firestore()
-        .collection('notifications')
-        .add(notification);
+        const db = getFirestore();
+        const notificationsRef = collection(db, 'notifications');
+        const docRef = await addDoc(notificationsRef, notification);
 
       return docRef.id;
     } catch (error: any) {
@@ -487,10 +487,9 @@ export class NotificationService {
     status: NotificationStatus
   ): Promise<void> {
     try {
-      await firestore()
-        .collection('notifications')
-        .doc(notificationId)
-        .update({
+        const db = getFirestore();
+        const notificationRef = doc(db, 'notifications', notificationId);
+        await updateDoc(notificationRef, {
           status,
           updatedAt: Timestamp.now(),
         });
@@ -507,12 +506,15 @@ export class NotificationService {
   // Get tenant by user ID
   private static async getTenantByUserId(userId: string): Promise<any> {
     try {
-      const snapshot = await firestore()
-        .collection('tenants')
-        .where('userId', '==', userId)
-        .where('status', '==', 'active')
-        .limit(1)
-        .get();
+        const db = getFirestore();
+        const tenantsRef = collection(db, 'tenants');
+        const q = query(
+          tenantsRef,
+          where('userId', '==', userId),
+          where('status', '==', 'active'),
+          limit(1)
+        );
+        const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
         const doc = snapshot.docs[0];
@@ -586,12 +588,12 @@ export class NotificationService {
   // Get all active tenants
   private static async getAllActiveTenants(): Promise<any[]> {
     try {
-      const snapshot = await firestore()
-        .collection('tenants')
-        .where('status', '==', 'active')
-        .get();
+        const db = getFirestore();
+        const tenantsRef = collection(db, 'tenants');
+        const q = query(tenantsRef, where('status', '==', 'active'));
+        const snapshot = await getDocs(q);
 
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      return snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
       console.error('Error getting active tenants:', error);
       return [];
@@ -602,15 +604,14 @@ export class NotificationService {
   static async markAsRead(notificationId: string): Promise<void> {
     try {
       // Check if user is authenticated
-      const currentUser = auth().currentUser;
+        const currentUser = getAuth().currentUser;
       if (!currentUser) {
         throw new Error('User not authenticated');
       }
       
-      await firestore()
-        .collection('notifications')
-        .doc(notificationId)
-        .update({
+        const db = getFirestore();
+        const notificationRef = doc(db, 'notifications', notificationId);
+        await updateDoc(notificationRef, {
           status: NotificationStatus.READ,
           readAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
@@ -626,10 +627,10 @@ export class NotificationService {
   }
 
   // Get user notifications
-  static async getUserNotifications(userId: string, limit: number = 50): Promise<Notification[]> {
+  static async getUserNotifications(userId: string, limitCount: number = 50): Promise<Notification[]> {
     try {
       // Check if user is authenticated
-      const currentUser = auth().currentUser;
+        const currentUser = getAuth().currentUser;
       
       if (!currentUser) {
         console.log('No authenticated user, returning empty notifications');
@@ -646,29 +647,35 @@ export class NotificationService {
       
       try {
         // Try with orderBy first
-        snapshot = await firestore()
-          .collection('notifications')
-          .where('userId', '==', userId)
-          .orderBy('createdAt', 'desc')
-          .limit(limit)
-          .get();
+        const db = getFirestore();
+        const notificationsRef = collection(db, 'notifications');
+        const q = query(
+          notificationsRef,
+          where('userId', '==', userId),
+          orderBy('createdAt', 'desc'),
+          limit(limitCount)
+        );
+        snapshot = await getDocs(q);
       } catch (orderByError: any) {
         // Fallback: try without orderBy (might be an indexing issue)
-        snapshot = await firestore()
-          .collection('notifications')
-          .where('userId', '==', userId)
-          .limit(limit)
-          .get();
+        const db = getFirestore();
+        const notificationsRef = collection(db, 'notifications');
+        const fallbackQuery = query(
+          notificationsRef,
+          where('userId', '==', userId),
+          limit(limitCount)
+        );
+        snapshot = await getDocs(fallbackQuery);
       }
 
-      let notifications = snapshot.docs.map(doc => ({ 
+      let notifications = snapshot.docs.map((doc: any) => ({ 
         id: doc.id, 
         ...doc.data() 
       } as Notification));
 
       // If we used the fallback query, manually sort by createdAt
       if (notifications.length > 0 && notifications[0].createdAt) {
-        notifications = notifications.sort((a, b) => {
+        notifications = notifications.sort((a: any, b: any) => {
           const aTime = a.createdAt?.toMillis?.() || 0;
           const bTime = b.createdAt?.toMillis?.() || 0;
           return bTime - aTime; // Descending order (newest first)

@@ -75,7 +75,7 @@ export interface User extends BaseUser {
   phoneVerified: boolean;
   
   // Onboarding status
-  onboardingCompleted: boolean;
+  onboardingCompleted?: boolean;
   
   // Optional address information
   address?: Location;
